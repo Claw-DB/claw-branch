@@ -1,10 +1,44 @@
 # claw-branch
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Docs](https://img.shields.io/docsrs/claw-branch)](https://docs.rs/claw-branch)
+[![Crates.io](https://img.shields.io/crates/v/claw-branch)](https://crates.io/crates/claw-branch)
 
-The fork/simulate/merge engine for ClawDB.
+`claw-branch` is the branch orchestration engine for ClawDB-style workflows.
 
-`claw-branch` is a Rust library for isolated, SQLite-backed branch workflows. It allows agents and applications to fork from a canonical trunk, experiment safely in isolated branch databases, and merge or commit changes back with explicit diff and conflict semantics.
+It provides isolated, SQLite-backed branch execution for agent and application workloads where you need to fork a trusted baseline, run experiments safely, inspect exact diffs, and merge with explicit conflict policy.
+
+## Why this crate exists
+
+Traditional branch workflows in application databases are hard to make deterministic, inspectable, and safe for concurrent agents. `claw-branch` solves this with:
+
+- File-level branch isolation (one SQLite DB file per branch).
+- Explicit lineage and merge-base tracking via DAG.
+- Three-way merge and selective commit primitives.
+- Sandboxed simulation with recommendation output.
+- Built-in metrics and divergence reporting.
+- Snapshot verification and garbage-collection tooling.
+
+## Installation
+
+```toml
+[dependencies]
+claw-branch = "0.1.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+```
+
+Optional guarded mode (integrates with `claw-guard` policy checks):
+
+```toml
+[dependencies]
+claw-branch = { version = "0.1.1", features = ["guarded"] }
+```
+
+## Feature flags
+
+| Feature | Default | Description |
+|---|---|---|
+| guarded | no | Enables `GuardedBranchEngine` integration with `claw-guard` |
 
 ## Architecture overview
 
@@ -32,7 +66,7 @@ Each branch is a separate SQLite file.
 The trunk is the canonical root branch and is never discarded.
 ```
 
-## Quick-start
+## Quick start
 
 ```rust
 use claw_branch::prelude::*;
@@ -46,11 +80,6 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     let engine = BranchEngine::new(config, std::path::Path::new("/data/source.db")).await?;
-
-    // Recommended when using the `guarded` feature:
-    // let guarded = GuardedBranchEngine::new(engine, guard);
-    // let feature = guarded.fork_trunk(&session, "feature/summariser").await?;
-
     let feature = engine.fork_trunk("feature/summariser").await?;
 
     let trunk = engine.trunk().await?;
@@ -78,12 +107,8 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     match report.recommendation {
-        Recommendation::Commit => {
-            engine.commit_to_trunk(feature.id).await?;
-        }
-        Recommendation::Discard => {
-            engine.discard(feature.id).await?;
-        }
+        Recommendation::Commit => engine.commit_to_trunk(feature.id).await?,
+        Recommendation::Discard => engine.discard(feature.id).await?,
         Recommendation::NeedsReview(notes) => {
             println!("manual review required: {notes:?}");
         }
@@ -108,6 +133,19 @@ async fn main() -> anyhow::Result<()> {
 | Metrics | Branch counters, size, and divergence signals |
 | GC | Snapshot cleanup for discarded/orphan branches |
 
+## Public module map
+
+| Module | Purpose |
+|---|---|
+| `branch` | Branch model, naming, lifecycle, and persistence |
+| `commit` | Full and selective commit flows including cherry-pick |
+| `dag` | Lineage graph, traversal, merge-base, and serialization |
+| `diff` | Diff extraction, scoring, and formatting |
+| `merge` | Three-way merge, strategies, and conflict resolution |
+| `metrics` | Divergence tracking and workspace reporting |
+| `sandbox` | Simulation environment and evaluation routines |
+| `snapshot` | Snapshot copy, integrity sidecar, and cleanup |
+
 ## BranchConfig reference
 
 | Field | Default | Description |
@@ -125,23 +163,42 @@ async fn main() -> anyhow::Result<()> {
 
 | Strategy | Behavior |
 |---|---|
-| MergeStrategy::Ours | Prefer source values on conflict |
-| MergeStrategy::Theirs | Prefer target values on conflict |
-| MergeStrategy::Union | Union JSON-like structures where possible |
-| MergeStrategy::FieldLevel(map) | Per-field strategy overrides |
-| MergeStrategy::Manual | Preserve conflicts for explicit review |
+| `MergeStrategy::Ours` | Prefer source values on conflict |
+| `MergeStrategy::Theirs` | Prefer target values on conflict |
+| `MergeStrategy::Union` | Union JSON-like structures where possible |
+| `MergeStrategy::FieldLevel(map)` | Per-field strategy overrides |
+| `MergeStrategy::Manual` | Preserve conflicts for explicit review |
 
-## Simulation flow
+## Simulation lifecycle
 
 1. Fork a temporary simulation branch from a parent.
 2. Run agent logic against the simulation SQLite pool.
 3. Compute diff and metrics.
-4. Produce Recommendation::Commit, Recommendation::Discard, or Recommendation::NeedsReview.
+4. Produce `Recommendation::Commit`, `Recommendation::Discard`, or `Recommendation::NeedsReview`.
 5. Apply workflow policy (promote/discard/review).
 
-## Performance Targets (Design Goals)
+## Error model
 
-The figures below are design goals and are verified in `benches/branch_bench.rs`.
+Most operations return `Result<T, claw_branch::error::BranchError>` and are designed to fail explicitly on:
+
+- Invalid branch names and lifecycle transitions.
+- Snapshot or sidecar integrity violations.
+- DAG cycle or invalid ancestry operations.
+- SQLite IO and migration failures.
+- Merge conflicts requiring manual strategy.
+
+## Safety and invariants
+
+- No `unwrap`/`expect` in library source (`clippy::unwrap_used` denied).
+- Public API docs required (`missing_docs` denied).
+- SQLite isolation by branch file to avoid cross-branch mutable overlap.
+- DAG cycle prevention before edge insertion.
+- Atomic merge and commit transactions.
+- Snapshot integrity checks via BLAKE3 hashes.
+
+## Performance targets (design goals)
+
+These targets are validated by benchmark suites in `benches/branch_bench.rs`.
 
 | Operation | Target |
 |---|---|
@@ -150,29 +207,29 @@ The figures below are design goals and are verified in `benches/branch_bench.rs`
 | Merge 100 non-conflicting entities | < 100ms |
 | Snapshot verify (10MB) | < 20ms |
 
-### Measured on Apple M2, 2025-Q2, 10k entity seed corpus
+## Compatibility
 
-- Fork 1k entities: pending baseline refresh in CI bench job
-- Diff 10k entities (10% modified): pending baseline refresh in CI bench job
-- Merge 100 non-conflicting entities: pending baseline refresh in CI bench job
-- Snapshot verify (10MB): pending baseline refresh in CI bench job
+- Rust edition: 2021
+- MSRV: 1.75 (see `Cargo.toml`)
+- Runtime: Tokio
+- Storage backend: SQLite via SQLx
 
-## Safety guarantees
-
-- No unwrap/expect in library source, enforced with clippy::unwrap_used deny.
-- No missing public docs, enforced with missing_docs deny.
-- SQLite isolation by branch file, avoiding shared mutable table state.
-- DAG cycle prevention before branch edge insertion.
-- Atomic merge transactions.
-- Snapshot integrity checks using BLAKE3.
-
-## Development commands
+## Development and CI commands
 
 ```bash
-cargo check --tests
-cargo check --benches
-cargo test
-cargo bench
-cargo fmt --all -- --check
+cargo build --all-features
+cargo test --all-features
 cargo clippy --all-targets --all-features -- -D warnings
+cargo fmt --all -- --check
+cargo deny check
+cargo audit
+cargo bench --no-run
+cargo bench -- --test
 ```
+
+## Release process
+
+1. Update `Cargo.toml` version and `CHANGELOG.md`.
+2. Ensure CI passes on `main`.
+3. Create and push a version tag (`vX.Y.Z`).
+4. `publish.yml` verifies the tag/version match, publishes to crates.io, and creates a GitHub release.
