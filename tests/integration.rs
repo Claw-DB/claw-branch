@@ -1,15 +1,13 @@
 //! Integration tests for claw-branch using real BranchEngine + seeded SQLite.
 
-
 use serde_json::json;
-use sqlx::{
-    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
-};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use tempfile::TempDir;
 use uuid::Uuid;
 
 use claw_branch::{
-    prelude::*, BranchError, CherryPick, MergeStrategy, Recommendation, SimulationScenario,
+    prelude::*, types::EntityType, BranchError, CherryPick, EntitySelection, MergeStrategy,
+    Recommendation, SimulationScenario,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -109,7 +107,7 @@ async fn seed_source_db(path: &std::path::Path) -> BranchResult<()> {
 
 /// Boots a BranchEngine backed by a temp directory with a seeded source DB.
 async fn make_engine() -> BranchResult<(BranchEngine, TempDir)> {
-    let dir = tempfile::tempdir().map_err(|e| BranchError::Io(e))?;
+    let dir = tempfile::tempdir().map_err(BranchError::Io)?;
     let workspace_id = Uuid::new_v4();
     let trunk_db = dir.path().join("source.db");
     seed_source_db(&trunk_db).await?;
@@ -183,7 +181,11 @@ async fn list_returns_forks() -> BranchResult<()> {
     engine.fork(trunk.id, "list-a", None).await?;
     engine.fork(trunk.id, "list-b", None).await?;
     let all = engine.list(None).await?;
-    assert!(all.len() >= 3, "trunk + 2 forks expected, got {}", all.len());
+    assert!(
+        all.len() >= 3,
+        "trunk + 2 forks expected, got {}",
+        all.len()
+    );
     Ok(())
 }
 
@@ -222,7 +224,10 @@ async fn diff_detects_field_modification() -> BranchResult<()> {
     pool.close().await;
 
     let diff = engine.diff(trunk.id, branch.id).await?;
-    assert!(diff.stats.modified > 0, "expected at least one modification");
+    assert!(
+        diff.stats.modified > 0,
+        "expected at least one modification"
+    );
     Ok(())
 }
 
@@ -247,7 +252,9 @@ async fn merge_strategy_ours_prefers_source() -> BranchResult<()> {
         .await?;
     pool.close().await;
 
-    let result = engine.merge(branch.id, trunk.id, MergeStrategy::Ours).await?;
+    let result = engine
+        .merge(branch.id, trunk.id, MergeStrategy::Ours)
+        .await?;
     // Merge should produce a result without panicking.
     let _ = (result.applied, result.conflicts.len());
     Ok(())
@@ -269,9 +276,8 @@ async fn selective_commit_all_entities() -> BranchResult<()> {
     let (engine, _dir) = make_engine().await?;
     let trunk = engine.trunk().await?;
     let branch = engine.fork(trunk.id, "commit-all", None).await?;
-    let _result = engine.commit_to_trunk(branch.id).await?;
-    // All-entity commit should report some entities processed.
-    // All-entity commit should report some entities processed.\n    let _ = result.fields_updated;
+    let result = engine.commit_to_trunk(branch.id).await?;
+    assert_eq!(result.target_branch_id, trunk.id);
     Ok(())
 }
 
@@ -282,8 +288,8 @@ async fn selective_commit_specific_fields() -> BranchResult<()> {
     let source = engine.fork(trunk.id, "commit-fields-src", None).await?;
     let target = engine.fork(trunk.id, "commit-fields-tgt", None).await?;
 
-    use claw_branch::EntitySelection;
     use claw_branch::types::EntityType;
+    use claw_branch::EntitySelection;
 
     let cherry = CherryPick {
         source_branch_id: source.id,
@@ -316,7 +322,10 @@ async fn dag_lineage_includes_trunk() -> BranchResult<()> {
 async fn dag_dot_export_is_nonempty() -> BranchResult<()> {
     let (engine, _dir) = make_engine().await?;
     let dot = engine.dag_dot().await?;
-    assert!(dot.contains("digraph"), "DOT output should start with digraph");
+    assert!(
+        dot.contains("digraph"),
+        "DOT output should start with digraph"
+    );
     Ok(())
 }
 
@@ -340,7 +349,10 @@ async fn simulation_evaluate_commit_recommendation() -> BranchResult<()> {
         .await?;
 
     // The agent did nothing, so result should be Discard (identical branch).
-    matches!(report.recommendation, Recommendation::Discard | Recommendation::Commit);
+    matches!(
+        report.recommendation,
+        Recommendation::Discard | Recommendation::Commit
+    );
     Ok(())
 }
 
@@ -350,7 +362,10 @@ async fn metrics_refresh_returns_counts() -> BranchResult<()> {
     let trunk = engine.trunk().await?;
     let metrics = engine.metrics(trunk.id).await?;
     assert!(metrics.memory_record_count >= 0);
-    assert!(metrics.bytes_on_disk > 0, "trunk DB should have nonzero size");
+    assert!(
+        metrics.bytes_on_disk > 0,
+        "trunk DB should have nonzero size"
+    );
     Ok(())
 }
 
@@ -361,7 +376,11 @@ async fn workspace_report_counts_branches() -> BranchResult<()> {
     engine.fork(trunk.id, "report-a", None).await?;
     engine.fork(trunk.id, "report-b", None).await?;
     let report = engine.workspace_report().await?;
-    assert!(report.branch_count >= 3, "trunk + 2 forks, got {}", report.branch_count);
+    assert!(
+        report.branch_count >= 3,
+        "trunk + 2 forks, got {}",
+        report.branch_count
+    );
     Ok(())
 }
 
@@ -370,7 +389,7 @@ async fn gc_runs_without_error() -> BranchResult<()> {
     let (engine, _dir) = make_engine().await?;
     let gc_report = engine.gc().await?;
     // On fresh workspace, nothing should be orphaned.
-    assert_eq!(gc_report.orphaned_deleted, 0);
+    assert_eq!(gc_report.branches_purged, 0);
     Ok(())
 }
 
@@ -386,7 +405,7 @@ async fn get_by_name_returns_branch() -> BranchResult<()> {
 
 #[tokio::test]
 async fn engine_open_reads_existing_workspace() -> BranchResult<()> {
-    let dir = tempfile::tempdir().map_err(|e| BranchError::Io(e))?;
+    let dir = tempfile::tempdir().map_err(BranchError::Io)?;
     let workspace_id = Uuid::new_v4();
     let trunk_db = dir.path().join("source.db");
     seed_source_db(&trunk_db).await?;
@@ -438,7 +457,9 @@ async fn fork_then_diff_then_merge_roundtrip() -> BranchResult<()> {
     let diff = engine.diff(trunk.id, branch.id).await?;
     assert!(diff.stats.modified > 0);
 
-    let result = engine.merge(branch.id, trunk.id, MergeStrategy::Theirs).await?;
+    let result = engine
+        .merge(branch.id, trunk.id, MergeStrategy::Theirs)
+        .await?;
     // Should succeed without error.
     let _ = (result.applied, result.conflicts.len());
     Ok(())
@@ -461,21 +482,69 @@ async fn simulation_teardown_discards_branch() -> BranchResult<()> {
     };
 
     let config_arc = Arc::new(engine.config().clone());
-    let mut env = SimulationEnvironment::setup(
-        &trunk,
-        scenario,
-        config_arc,
-        engine.lifecycle(),
-    )
-    .await
-    .unwrap_or_else(|_| {
-        panic!("SimulationEnvironment::setup failed in teardown test");
-    });
+    let mut env = SimulationEnvironment::setup(&trunk, scenario, config_arc, engine.lifecycle())
+        .await
+        .unwrap_or_else(|_| {
+            panic!("SimulationEnvironment::setup failed in teardown test");
+        });
 
     let sandbox_id = env.branch.id;
     env.teardown(engine.lifecycle()).await?;
 
     let refreshed = engine.get(sandbox_id).await?;
-    assert!(!refreshed.status.is_live(), "sandbox should be discarded after teardown");
+    assert!(
+        !refreshed.status.is_live(),
+        "sandbox should be discarded after teardown"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn compare_branches_matches_diff_result_shape() -> BranchResult<()> {
+    let (engine, _dir) = make_engine().await?;
+    let trunk = engine.trunk().await?;
+    let branch = engine.fork(trunk.id, "compare-shape", None).await?;
+
+    let left = engine.diff(trunk.id, branch.id).await?;
+    let right = engine.compare_branches(trunk.id, branch.id).await?;
+
+    assert_eq!(left.stats.total_entities, right.stats.total_entities);
+    assert_eq!(left.stats.modified, right.stats.modified);
+    Ok(())
+}
+
+#[tokio::test]
+async fn cherry_pick_api_executes_commit_path() -> BranchResult<()> {
+    let (engine, _dir) = make_engine().await?;
+    let trunk = engine.trunk().await?;
+    let source = engine.fork(trunk.id, "cp-source", None).await?;
+    let target = engine.fork(trunk.id, "cp-target", None).await?;
+
+    let result = engine
+        .cherry_pick(
+            source.id,
+            target.id,
+            vec![EntitySelection {
+                entity_type: EntityType::MemoryRecord,
+                entity_ids: vec![],
+                fields: Some(vec!["content".to_string()]),
+            }],
+            Some("integration cherry-pick".to_string()),
+        )
+        .await?;
+
+    assert_eq!(result.target_branch_id, target.id);
+    Ok(())
+}
+
+#[tokio::test]
+async fn gc_scheduler_start_stop_is_joinable() -> BranchResult<()> {
+    let (engine, _dir) = make_engine().await?;
+
+    engine.start_gc_scheduler().await?;
+    engine.start_gc_scheduler().await?;
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    engine.stop_gc_scheduler().await?;
+    engine.shutdown().await?;
     Ok(())
 }

@@ -11,7 +11,10 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use tempfile::TempDir;
 use uuid::Uuid;
 
-use claw_branch::{BranchConfig, BranchEngine, MergeStrategy};
+use claw_branch::{
+    snapshot::{manifest::SnapshotManifest, verifier::verify_snapshot},
+    BranchConfig, BranchEngine, MergeStrategy,
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,7 +90,10 @@ fn bench_fork_empty_db(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let trunk = engine.trunk().await.expect("trunk");
-                engine.fork(trunk.id, &format!("b-{}", Uuid::new_v4()), None).await.expect("fork");
+                engine
+                    .fork(trunk.id, &format!("b-{}", Uuid::new_v4()), None)
+                    .await
+                    .expect("fork");
             })
         })
     });
@@ -100,7 +106,10 @@ fn bench_fork_1k_entities(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let trunk = engine.trunk().await.expect("trunk");
-                engine.fork(trunk.id, &format!("b-{}", Uuid::new_v4()), None).await.expect("fork");
+                engine
+                    .fork(trunk.id, &format!("b-{}", Uuid::new_v4()), None)
+                    .await
+                    .expect("fork");
             })
         })
     });
@@ -113,7 +122,10 @@ fn bench_fork_10k_entities(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let trunk = engine.trunk().await.expect("trunk");
-                engine.fork(trunk.id, &format!("b-{}", Uuid::new_v4()), None).await.expect("fork");
+                engine
+                    .fork(trunk.id, &format!("b-{}", Uuid::new_v4()), None)
+                    .await
+                    .expect("fork");
             })
         })
     });
@@ -133,7 +145,10 @@ fn bench_diff_identical(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let branches = engine.list(None).await.expect("list");
-                engine.diff(branches[0].id, branches[1].id).await.expect("diff");
+                engine
+                    .diff(branches[0].id, branches[1].id)
+                    .await
+                    .expect("diff");
             })
         })
     });
@@ -144,7 +159,10 @@ fn bench_diff_10pct_modified(c: &mut Criterion) {
     let (engine, _dir) = rt.block_on(async {
         let e = setup_engine(1_000).await;
         let trunk = e.0.trunk().await.expect("trunk");
-        let branch = e.0.fork(trunk.id, "diff-modified", None).await.expect("fork");
+        let branch =
+            e.0.fork(trunk.id, "diff-modified", None)
+                .await
+                .expect("fork");
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
             .connect_with(
@@ -156,7 +174,9 @@ fn bench_diff_10pct_modified(c: &mut Criterion) {
             .await
             .expect("pool");
         sqlx::query("UPDATE memory_records SET content = 'mod' WHERE rowid % 10 = 0")
-            .execute(&pool).await.expect("update");
+            .execute(&pool)
+            .await
+            .expect("update");
         pool.close().await;
         e
     });
@@ -164,7 +184,10 @@ fn bench_diff_10pct_modified(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let branches = engine.list(None).await.expect("list");
-                engine.diff(branches[0].id, branches[1].id).await.expect("diff");
+                engine
+                    .diff(branches[0].id, branches[1].id)
+                    .await
+                    .expect("diff");
             })
         })
     });
@@ -175,7 +198,10 @@ fn bench_diff_100pct_diverged(c: &mut Criterion) {
     let (engine, _dir) = rt.block_on(async {
         let e = setup_engine(500).await;
         let trunk = e.0.trunk().await.expect("trunk");
-        let branch = e.0.fork(trunk.id, "diff-all-mod", None).await.expect("fork");
+        let branch =
+            e.0.fork(trunk.id, "diff-all-mod", None)
+                .await
+                .expect("fork");
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
             .connect_with(
@@ -187,7 +213,9 @@ fn bench_diff_100pct_diverged(c: &mut Criterion) {
             .await
             .expect("pool");
         sqlx::query("UPDATE memory_records SET content = 'all_mod'")
-            .execute(&pool).await.expect("update");
+            .execute(&pool)
+            .await
+            .expect("update");
         pool.close().await;
         e
     });
@@ -195,7 +223,10 @@ fn bench_diff_100pct_diverged(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let branches = engine.list(None).await.expect("list");
-                engine.diff(branches[0].id, branches[1].id).await.expect("diff");
+                engine
+                    .diff(branches[0].id, branches[1].id)
+                    .await
+                    .expect("diff");
             })
         })
     });
@@ -226,7 +257,9 @@ fn bench_merge_no_conflicts(c: &mut Criterion) {
             )
             .bind(Uuid::new_v4().to_string())
             .bind(format!("new_{i}"))
-            .execute(&pool).await.expect("insert");
+            .execute(&pool)
+            .await
+            .expect("insert");
         }
         pool.close().await;
         e
@@ -235,7 +268,10 @@ fn bench_merge_no_conflicts(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let branches = engine.list(None).await.expect("list");
-                engine.merge(branches[1].id, branches[0].id, MergeStrategy::Theirs).await.expect("merge");
+                engine
+                    .merge(branches[1].id, branches[0].id, MergeStrategy::Theirs)
+                    .await
+                    .expect("merge");
             })
         })
     });
@@ -246,7 +282,10 @@ fn bench_merge_conflicts(c: &mut Criterion) {
     let (engine, _dir) = rt.block_on(async {
         let e = setup_engine(100).await;
         let trunk = e.0.trunk().await.expect("trunk");
-        let branch = e.0.fork(trunk.id, "merge-conflict", None).await.expect("fork");
+        let branch =
+            e.0.fork(trunk.id, "merge-conflict", None)
+                .await
+                .expect("fork");
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
             .connect_with(
@@ -258,7 +297,9 @@ fn bench_merge_conflicts(c: &mut Criterion) {
             .await
             .expect("pool");
         sqlx::query("UPDATE memory_records SET content = 'conflict_val'")
-            .execute(&pool).await.expect("update");
+            .execute(&pool)
+            .await
+            .expect("update");
         pool.close().await;
         e
     });
@@ -266,7 +307,10 @@ fn bench_merge_conflicts(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let branches = engine.list(None).await.expect("list");
-                engine.merge(branches[1].id, branches[0].id, MergeStrategy::Ours).await.expect("merge");
+                engine
+                    .merge(branches[1].id, branches[0].id, MergeStrategy::Ours)
+                    .await
+                    .expect("merge");
             })
         })
     });
@@ -279,8 +323,10 @@ fn bench_selective_commit_100(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let trunk = engine.trunk().await.expect("trunk");
-                let branch = engine.fork(trunk.id, &format!("c-{}", Uuid::new_v4()), None)
-                    .await.expect("fork");
+                let branch = engine
+                    .fork(trunk.id, &format!("c-{}", Uuid::new_v4()), None)
+                    .await
+                    .expect("fork");
                 engine.commit_to_trunk(branch.id).await.expect("commit");
             })
         })
@@ -307,7 +353,10 @@ fn bench_dag_lca_depth_10(c: &mut Criterion) {
         let e = setup_engine(5).await;
         let mut parent_id = e.0.trunk().await.expect("trunk").id;
         for d in 0..10 {
-            let b = e.0.fork(parent_id, &format!("depth-{d}"), None).await.expect("fork");
+            let b =
+                e.0.fork(parent_id, &format!("depth-{d}"), None)
+                    .await
+                    .expect("fork");
             parent_id = b.id;
         }
         e
@@ -342,7 +391,10 @@ fn bench_gc_scan_100_branches(c: &mut Criterion) {
         let e = setup_engine(5).await;
         let trunk_id = e.0.trunk().await.expect("trunk").id;
         for i in 0..20 {
-            let b = e.0.fork(trunk_id, &format!("gc-{i}"), None).await.expect("fork");
+            let b =
+                e.0.fork(trunk_id, &format!("gc-{i}"), None)
+                    .await
+                    .expect("fork");
             e.0.discard(b.id).await.expect("discard");
         }
         e
@@ -356,10 +408,241 @@ fn bench_gc_scan_100_branches(c: &mut Criterion) {
     });
 }
 
+fn bench_diff_10k_10pct_modified(c: &mut Criterion) {
+    let rt = rt();
+    let (engine, _dir) = rt.block_on(async {
+        let e = setup_engine(10_000).await;
+        let trunk = e.0.trunk().await.expect("trunk");
+        let branch = e.0.fork(trunk.id, "diff-10k", None).await.expect("fork");
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(&branch.db_path)
+                    .create_if_missing(false)
+                    .journal_mode(SqliteJournalMode::Wal),
+            )
+            .await
+            .expect("pool");
+        sqlx::query("UPDATE memory_records SET content='modified' WHERE rowid <= 1000")
+            .execute(&pool)
+            .await
+            .expect("update");
+        pool.close().await;
+        e
+    });
+    c.bench_function("bench_diff_10k_10pct_modified", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                let branches = engine.list(None).await.expect("list");
+                engine
+                    .diff(branches[0].id, branches[1].id)
+                    .await
+                    .expect("diff");
+            })
+        })
+    });
+}
+
+fn bench_merge_100_no_conflicts(c: &mut Criterion) {
+    let rt = rt();
+    let (engine, _dir) = rt.block_on(async {
+        let e = setup_engine(1_000).await;
+        let trunk = e.0.trunk().await.expect("trunk");
+        let source = e.0.fork(trunk.id, "merge-src", None).await.expect("fork");
+        let target = e.0.fork(trunk.id, "merge-tgt", None).await.expect("fork");
+
+        let src_pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(&source.db_path)
+                    .create_if_missing(false)
+                    .journal_mode(SqliteJournalMode::Wal),
+            )
+            .await
+            .expect("src pool");
+        let tgt_pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(&target.db_path)
+                    .create_if_missing(false)
+                    .journal_mode(SqliteJournalMode::Wal),
+            )
+            .await
+            .expect("tgt pool");
+
+        for i in 0..100 {
+            sqlx::query(
+                "INSERT INTO memory_records (id, content, metadata, created_at, updated_at)
+                 VALUES (?, ?, '{}', datetime('now'), datetime('now'))",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(format!("src_{i}"))
+            .execute(&src_pool)
+            .await
+            .expect("src insert");
+            sqlx::query(
+                "INSERT INTO memory_records (id, content, metadata, created_at, updated_at)
+                 VALUES (?, ?, '{}', datetime('now'), datetime('now'))",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(format!("tgt_{i}"))
+            .execute(&tgt_pool)
+            .await
+            .expect("tgt insert");
+        }
+        src_pool.close().await;
+        tgt_pool.close().await;
+        e
+    });
+
+    c.bench_function("bench_merge_100_no_conflicts", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                let branches = engine.list(None).await.expect("list");
+                engine
+                    .merge(branches[1].id, branches[2].id, MergeStrategy::Ours)
+                    .await
+                    .expect("merge");
+            })
+        })
+    });
+}
+
+fn bench_snapshot_verify_10mb(c: &mut Criterion) {
+    let rt = rt();
+    let (manifest, _dir) = rt.block_on(async {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let source_db = dir.path().join("source.db");
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(&source_db)
+                    .create_if_missing(true)
+                    .journal_mode(SqliteJournalMode::Wal),
+            )
+            .await
+            .expect("pool");
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS memory_records (
+                id TEXT PRIMARY KEY,
+                content TEXT,
+                metadata TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create table");
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, name TEXT, metadata TEXT, created_at TEXT, updated_at TEXT)",
+        )
+        .execute(&pool)
+        .await
+        .expect("create sessions");
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS tool_outputs (id TEXT PRIMARY KEY, tool_name TEXT, output TEXT, metadata TEXT, created_at TEXT, updated_at TEXT)",
+        )
+        .execute(&pool)
+        .await
+        .expect("create tool_outputs");
+
+        for i in 0..10_000 {
+            sqlx::query(
+                "INSERT INTO memory_records (id, content, metadata, created_at, updated_at)
+                 VALUES (?, ?, '{}', datetime('now'), datetime('now'))",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(format!("{:04}-{}", i, "x".repeat(1024)))
+            .execute(&pool)
+            .await
+            .expect("insert");
+        }
+        pool.close().await;
+
+        let config = BranchConfig::builder()
+            .workspace_id(Uuid::new_v4())
+            .branches_dir(dir.path().join("branches"))
+            .build()
+            .expect("config");
+        let engine = BranchEngine::new(config, &source_db).await.expect("engine");
+        let trunk = engine.trunk().await.expect("trunk");
+        let manifest = SnapshotManifest::load(
+            trunk
+                .db_path
+                .parent()
+                .expect("snapshot path parent should exist"),
+        )
+        .expect("manifest");
+        (manifest, dir)
+    });
+
+    c.bench_function("bench_snapshot_verify_10mb", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                verify_snapshot(&manifest).await.expect("verify");
+            })
+        })
+    });
+}
+
+fn bench_gc_100_discarded(c: &mut Criterion) {
+    let rt = rt();
+    let (engine, _dir) = rt.block_on(async {
+        let e = setup_engine(100).await;
+        let trunk = e.0.trunk().await.expect("trunk");
+        for i in 0..100 {
+            let branch =
+                e.0.fork(trunk.id, &format!("gc-full-{i}"), None)
+                    .await
+                    .expect("fork");
+            e.0.discard(branch.id).await.expect("discard");
+        }
+        e
+    });
+
+    c.bench_function("bench_gc_100_discarded", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                engine.gc().await.expect("gc");
+            })
+        })
+    });
+}
+
 // ── Groups ────────────────────────────────────────────────────────────────────
 
-criterion_group!(fork_benches, bench_fork_empty_db, bench_fork_1k_entities, bench_fork_10k_entities);
-criterion_group!(diff_benches, bench_diff_identical, bench_diff_10pct_modified, bench_diff_100pct_diverged);
-criterion_group!(merge_benches, bench_merge_no_conflicts, bench_merge_conflicts, bench_selective_commit_100);
-criterion_group!(infra_benches, bench_snapshot_verify, bench_dag_lca_depth_10, bench_metrics_refresh, bench_gc_scan_100_branches);
+criterion_group!(
+    fork_benches,
+    bench_fork_empty_db,
+    bench_fork_1k_entities,
+    bench_fork_10k_entities
+);
+criterion_group!(
+    diff_benches,
+    bench_diff_identical,
+    bench_diff_10pct_modified,
+    bench_diff_100pct_diverged,
+    bench_diff_10k_10pct_modified
+);
+criterion_group!(
+    merge_benches,
+    bench_merge_no_conflicts,
+    bench_merge_conflicts,
+    bench_selective_commit_100,
+    bench_merge_100_no_conflicts
+);
+criterion_group!(
+    infra_benches,
+    bench_snapshot_verify,
+    bench_dag_lca_depth_10,
+    bench_metrics_refresh,
+    bench_gc_scan_100_branches,
+    bench_snapshot_verify_10mb,
+    bench_gc_100_discarded
+);
 criterion_main!(fork_benches, diff_benches, merge_benches, infra_benches);
