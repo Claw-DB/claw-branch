@@ -1,0 +1,39 @@
+[package]
+name = "claw-branch"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Fork, simulate, and merge engine for ClawDB."
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate", "chrono", "uuid"] }
+async-trait = "0.1"
+blake3 = "1.5"
+similar = "2.5"
+petgraph = "0.6"
+dashmap = "6"
+arc-swap = "1"
+tempfile = "3"
+bytes = "1"
+parking_lot = "0.12"
+tokio-util = { version = "0.7", features = ["rt"] }
+claw-core = "0.1.0"
+
+[dev-dependencies]
+tokio-test = "0.4"
+rstest = "0.21"
+approx = "0.5"
+criterion = { version = "0.5", features = ["async_tokio"] }
+
+[[bench]]
+name = "branch_bench"
+harness = false
