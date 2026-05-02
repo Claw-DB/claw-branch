@@ -1,5 +1,7 @@
 # claw-branch
 
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+
 The fork/simulate/merge engine for ClawDB.
 
 `claw-branch` is a Rust library for isolated, SQLite-backed branch workflows. It allows agents and applications to fork from a canonical trunk, experiment safely in isolated branch databases, and merge or commit changes back with explicit diff and conflict semantics.
@@ -44,6 +46,11 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     let engine = BranchEngine::new(config, std::path::Path::new("/data/source.db")).await?;
+
+    // Recommended when using the `guarded` feature:
+    // let guarded = GuardedBranchEngine::new(engine, guard);
+    // let feature = guarded.fork_trunk(&session, "feature/summariser").await?;
+
     let feature = engine.fork_trunk("feature/summariser").await?;
 
     let trunk = engine.trunk().await?;
@@ -132,9 +139,9 @@ async fn main() -> anyhow::Result<()> {
 4. Produce Recommendation::Commit, Recommendation::Discard, or Recommendation::NeedsReview.
 5. Apply workflow policy (promote/discard/review).
 
-## Performance targets
+## Performance Targets (Design Goals)
 
-Measured goals on a modern laptop class machine:
+The figures below are design goals and are verified in `benches/branch_bench.rs`.
 
 | Operation | Target |
 |---|---|
@@ -142,6 +149,13 @@ Measured goals on a modern laptop class machine:
 | Diff 10k entities (10% modified) | < 200ms |
 | Merge 100 non-conflicting entities | < 100ms |
 | Snapshot verify (10MB) | < 20ms |
+
+### Measured on Apple M2, 2025-Q2, 10k entity seed corpus
+
+- Fork 1k entities: pending baseline refresh in CI bench job
+- Diff 10k entities (10% modified): pending baseline refresh in CI bench job
+- Merge 100 non-conflicting entities: pending baseline refresh in CI bench job
+- Snapshot verify (10MB): pending baseline refresh in CI bench job
 
 ## Safety guarantees
 

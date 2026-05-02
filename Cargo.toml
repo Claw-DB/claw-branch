@@ -3,8 +3,20 @@ name = "claw-branch"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
-description = "Fork, simulate, and merge engine for ClawDB."
-license = "MIT"
+description = "Fork, simulate, and merge engine for ClawDB agents."
+license = "Apache-2.0"
+authors = ["ClawDB <adeyemitomiwa7@gmail.com>"]
+repository = "https://github.com/Claw-DB/claw-branch"
+homepage = "https://github.com/Claw-DB/claw-branch"
+documentation = "https://docs.rs/claw-branch"
+readme = "README.md"
+keywords = ["database", "agent", "branch", "simulation", "clawdb"]
+categories = ["database", "simulation"]
+exclude = ["target/", "benches/", ".github/", "tests/fixtures/"]
+
+[features]
+default = []
+guarded = ["dep:claw-guard"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -15,7 +27,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate", "chrono", "uuid"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate", "chrono", "uuid"] }
 async-trait = "0.1"
 blake3 = "1.5"
 similar = "2.5"
@@ -26,13 +38,14 @@ tempfile = "3"
 bytes = "1"
 parking_lot = "0.12"
 tokio-util = { version = "0.7", features = ["rt"] }
-claw-core = "0.1.0"
+claw-guard = { version = "0.1.0", optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"
 rstest = "0.21"
 approx = "0.5"
 criterion = { version = "0.5", features = ["async_tokio"] }
+claw-guard = { version = "0.1.0" }
 
 [[bench]]
 name = "branch_bench"

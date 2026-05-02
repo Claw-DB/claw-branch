@@ -14,3 +14,6 @@ CREATE TABLE IF NOT EXISTS branches (
     updated_at TEXT NOT NULL,
     UNIQUE(workspace_id, slug)
 );
+
+CREATE INDEX IF NOT EXISTS idx_branches_workspace_status
+    ON branches(workspace_id, status);
