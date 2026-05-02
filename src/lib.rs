@@ -64,14 +64,17 @@
 //! }
 //! ```
 
-#![deny(missing_docs, clippy::unwrap_used)]
+#![deny(missing_docs)]
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::expect_used)]
+#![deny(clippy::panic)]
 
 /// Branch management primitives.
 pub mod branch;
-/// Shared configuration for branch operations.
-pub mod config;
 /// Selective commit and history helpers.
 pub mod commit;
+/// Shared configuration for branch operations.
+pub mod config;
 /// DAG lineage graph support.
 pub mod dag;
 /// Diff extraction and reporting.
@@ -80,6 +83,9 @@ pub mod diff;
 pub mod engine;
 /// Error types used across the crate.
 pub mod error;
+/// Guard-aware wrapper around the branch engine.
+#[cfg(feature = "guarded")]
+pub mod guarded;
 /// Merge algorithms and conflict handling.
 pub mod merge;
 /// Metrics collection and reporting.
@@ -94,27 +100,23 @@ pub mod types;
 // ── Primary re-exports ────────────────────────────────────────────────────────
 
 pub use config::{BranchConfig, BranchConfigBuilder};
-pub use engine::BranchEngine;
+pub use engine::{BranchConfigError, BranchEngine, BranchEngineBuilder};
 pub use error::{BranchError, BranchResult};
+#[cfg(feature = "guarded")]
+pub use guarded::GuardedBranchEngine;
 
 // types
 pub use types::{
-    Branch, BranchMetrics, BranchStatus,
-    CommitLogEntry, CommitResult,
-    DiffKind, DiffResult, DiffStats, EntityDiff, EntityType, FieldDiff,
-    MergeConflict, MergeResult,
-    SimulationOutcome, WorkspaceReport,
+    Branch, BranchMetrics, BranchStatus, CommitLogEntry, CommitResult, DiffKind, DiffResult,
+    DiffStats, EntityDiff, EntityType, FieldDiff, MergeConflict, MergeResult, SimulationOutcome,
+    WorkspaceReport,
 };
 
 // diff
 pub use diff::formatter::DiffSummary;
 
 // merge
-pub use merge::{
-    resolver::ResolvedValue,
-    strategies::MergeStrategy,
-    three_way::MergePreview,
-};
+pub use merge::{resolver::ResolvedValue, strategies::MergeStrategy, three_way::MergePreview};
 
 // commit
 pub use commit::{
@@ -149,8 +151,7 @@ pub use snapshot::gc::GcReport;
 /// ```
 pub mod prelude {
     pub use crate::{
-        Branch, BranchConfig, BranchEngine, BranchError, BranchResult, BranchStatus,
-        CherryPick, EvaluationReport, MergeStrategy, Recommendation,
-        SimulationScenario, WorkspaceReport,
+        Branch, BranchConfig, BranchEngine, BranchError, BranchResult, BranchStatus, CherryPick,
+        EvaluationReport, MergeStrategy, Recommendation, SimulationScenario, WorkspaceReport,
     };
 }

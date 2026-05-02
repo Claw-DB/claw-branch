@@ -91,9 +91,7 @@ impl ThreeWayMerger {
                     auto_changes.push((merged, ResolvedValue::UseOurs));
                 } else {
                     // Attempt to resolve per strategy.
-                    let resolved = self
-                        .resolver
-                        .resolve_batch(field_conflicts, strategy)?;
+                    let resolved = self.resolver.resolve_batch(field_conflicts, strategy)?;
                     for (conflict, resolution) in resolved {
                         match resolution {
                             ResolvedValue::Escalate => {
@@ -180,8 +178,7 @@ impl ThreeWayMerger {
         {
             if let Some(ours_entity) = ours_by_id.get(&theirs_entity.entity_id) {
                 let base_val = serde_json::Value::Object(serde_json::Map::new());
-                let mut field_conflicts =
-                    detect_conflicts(ours_entity, theirs_entity, &base_val);
+                let mut field_conflicts = detect_conflicts(ours_entity, theirs_entity, &base_val);
                 if field_conflicts.is_empty() {
                     auto_resolved += 1;
                 } else {

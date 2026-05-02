@@ -6,9 +6,8 @@ use crate::types::DiffResult;
 ///
 /// Formula: `(added + removed + modified * 0.5) / max(base_entity_count, 1)`, clamped to 1.0.
 pub fn compute_score(diff: &DiffResult, base_entity_count: u64) -> f64 {
-    let numerator = diff.stats.added as f64
-        + diff.stats.removed as f64
-        + diff.stats.modified as f64 * 0.5;
+    let numerator =
+        diff.stats.added as f64 + diff.stats.removed as f64 + diff.stats.modified as f64 * 0.5;
     let denominator = (base_entity_count.max(1)) as f64;
     (numerator / denominator).min(1.0)
 }

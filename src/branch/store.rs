@@ -3,7 +3,10 @@
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
-use sqlx::{sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions}, Row, SqlitePool};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+    Row, SqlitePool,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -27,7 +30,10 @@ impl BranchStore {
             .filename(db_path)
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Wal);
-        let pool = SqlitePoolOptions::new().max_connections(5).connect_with(options).await?;
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect_with(options)
+            .await?;
         sqlx::migrate!("./migrations").run(&pool).await?;
         Ok(Self { pool })
     }
@@ -179,6 +185,18 @@ impl BranchStore {
         Ok(count as u64)
     }
 
+    /// Counts active and dormant branches for a workspace.
+    pub async fn count_active(&self, workspace_id: Uuid) -> BranchResult<u64> {
+        let row = sqlx::query(
+            "SELECT COUNT(*) AS count FROM branches WHERE workspace_id = ? AND (status = 'active' OR status = 'dormant')",
+        )
+        .bind(workspace_id.to_string())
+        .fetch_one(&self.pool)
+        .await?;
+        let count: i64 = row.try_get("count")?;
+        Ok(count as u64)
+    }
+
     /// Inserts a commit log entry.
     pub async fn insert_commit_log(&self, entry: &CommitLogEntry) -> BranchResult<()> {
         let entity_ids = serde_json::to_string(&entry.entity_ids)?;
@@ -198,7 +216,11 @@ impl BranchStore {
     }
 
     /// Lists recent commit log entries for a branch.
-    pub async fn list_commits(&self, branch_id: Uuid, limit: u32) -> BranchResult<Vec<CommitLogEntry>> {
+    pub async fn list_commits(
+        &self,
+        branch_id: Uuid,
+        limit: u32,
+    ) -> BranchResult<Vec<CommitLogEntry>> {
         let rows = sqlx::query(
             "SELECT id, branch_id, entity_type, entity_ids, op_kind, committed_at, message FROM branch_commits WHERE branch_id = ? ORDER BY committed_at DESC LIMIT ?",
         )
@@ -239,7 +261,9 @@ impl BranchStore {
 fn map_unique_name_error(name: &str) -> impl FnOnce(sqlx::Error) -> BranchError + '_ {
     move |error| match &error {
         sqlx::Error::Database(database_error)
-            if database_error.message().contains("UNIQUE constraint failed") =>
+            if database_error
+                .message()
+                .contains("UNIQUE constraint failed") =>
         {
             BranchError::BranchAlreadyExists(name.to_string())
         }
@@ -273,15 +297,21 @@ fn branch_from_row(row: sqlx::sqlite::SqliteRow) -> BranchResult<Branch> {
         created_at: parse_datetime(row.try_get("created_at")?)?,
         updated_at: parse_datetime(row.try_get("updated_at")?)?,
         metrics: BranchMetrics {
-            op_count: row.try_get::<Option<i64>, _>("op_count")?.unwrap_or_default() as u64,
+            op_count: row
+                .try_get::<Option<i64>, _>("op_count")?
+                .unwrap_or_default() as u64,
             memory_record_count: row
                 .try_get::<Option<i64>, _>("memory_record_count")?
                 .unwrap_or_default(),
-            session_count: row.try_get::<Option<i64>, _>("session_count")?.unwrap_or_default(),
+            session_count: row
+                .try_get::<Option<i64>, _>("session_count")?
+                .unwrap_or_default(),
             tool_output_count: row
                 .try_get::<Option<i64>, _>("tool_output_count")?
                 .unwrap_or_default(),
-            bytes_on_disk: row.try_get::<Option<i64>, _>("bytes_on_disk")?.unwrap_or_default() as u64,
+            bytes_on_disk: row
+                .try_get::<Option<i64>, _>("bytes_on_disk")?
+                .unwrap_or_default() as u64,
             divergence_score: row
                 .try_get::<Option<f64>, _>("divergence_score")?
                 .unwrap_or_default(),
@@ -310,7 +340,7 @@ fn commit_log_from_row(row: sqlx::sqlite::SqliteRow) -> BranchResult<CommitLogEn
         entity_type: row
             .try_get::<Option<String>, _>("entity_type")?
             .as_deref()
-            .and_then(EntityType::from_str),
+            .and_then(EntityType::parse),
         entity_ids: serde_json::from_str(&entity_ids)?,
         op_kind: row.try_get("op_kind")?,
         committed_at: parse_datetime(row.try_get("committed_at")?)?,

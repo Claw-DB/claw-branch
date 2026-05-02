@@ -138,7 +138,10 @@ impl<'a> DagTraversal<'a> {
     pub fn merge_order(&self, branches: &[Uuid]) -> BranchResult<Vec<Uuid>> {
         let full_order = self.topological_sort()?;
         let want: HashSet<Uuid> = branches.iter().copied().collect();
-        Ok(full_order.into_iter().filter(|id| want.contains(id)).collect())
+        Ok(full_order
+            .into_iter()
+            .filter(|id| want.contains(id))
+            .collect())
     }
 }
 
@@ -179,8 +182,8 @@ fn bfs_depth_map(g: &petgraph::Graph<Uuid, EdgeMeta>) -> HashMap<Uuid, usize> {
     while let Some(node) = queue.pop_front() {
         let d = map[&g[node]];
         for child in g.neighbors_directed(node, Direction::Outgoing) {
-            if !map.contains_key(&g[child]) {
-                map.insert(g[child], d + 1);
+            if let std::collections::hash_map::Entry::Vacant(entry) = map.entry(g[child]) {
+                entry.insert(d + 1);
                 queue.push_back(child);
             }
         }
@@ -209,8 +212,8 @@ fn dfs_ancestor_set(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{path::Path, sync::Arc};
     use crate::config::BranchConfig;
+    use std::{path::Path, sync::Arc};
 
     fn cfg() -> Arc<BranchConfig> {
         Arc::new(BranchConfig::default_for_workspace(
@@ -237,8 +240,14 @@ mod tests {
             assert!(order.contains(id));
         }
         for w in ids.windows(2) {
-            let pp = order.iter().position(|x| x == &w[0]).ok_or(BranchError::DagNodeNotFound(w[0]))?;
-            let pc = order.iter().position(|x| x == &w[1]).ok_or(BranchError::DagNodeNotFound(w[1]))?;
+            let pp = order
+                .iter()
+                .position(|x| x == &w[0])
+                .ok_or(BranchError::DagNodeNotFound(w[0]))?;
+            let pc = order
+                .iter()
+                .position(|x| x == &w[1])
+                .ok_or(BranchError::DagNodeNotFound(w[1]))?;
             assert!(pp < pc);
         }
         Ok(())
@@ -254,9 +263,18 @@ mod tests {
         g.add_edge(root, c)?;
         let t = DagTraversal::new(&g);
         let order = t.topological_sort()?;
-        let pr = order.iter().position(|x| x == &root).ok_or(BranchError::DagNodeNotFound(root))?;
-        let pb = order.iter().position(|x| x == &b).ok_or(BranchError::DagNodeNotFound(b))?;
-        let pc = order.iter().position(|x| x == &c).ok_or(BranchError::DagNodeNotFound(c))?;
+        let pr = order
+            .iter()
+            .position(|x| x == &root)
+            .ok_or(BranchError::DagNodeNotFound(root))?;
+        let pb = order
+            .iter()
+            .position(|x| x == &b)
+            .ok_or(BranchError::DagNodeNotFound(b))?;
+        let pc = order
+            .iter()
+            .position(|x| x == &c)
+            .ok_or(BranchError::DagNodeNotFound(c))?;
         assert!(pr < pb && pr < pc);
         Ok(())
     }
@@ -276,7 +294,12 @@ mod tests {
         let (g, ids) = linear_graph(4);
         let t = DagTraversal::new(&g);
         let leaves = t.leaves()?;
-        assert_eq!(leaves, vec![*ids.last().ok_or(BranchError::DagNodeNotFound(Uuid::nil()))?]);
+        assert_eq!(
+            leaves,
+            vec![*ids
+                .last()
+                .ok_or(BranchError::DagNodeNotFound(Uuid::nil()))?]
+        );
         Ok(())
     }
 
@@ -422,7 +445,9 @@ mod tests {
     fn test_subtree_of_leaf_is_empty() -> BranchResult<()> {
         let (g, ids) = linear_graph(3);
         let t = DagTraversal::new(&g);
-        let last = *ids.last().ok_or(BranchError::DagNodeNotFound(Uuid::nil()))?;
+        let last = *ids
+            .last()
+            .ok_or(BranchError::DagNodeNotFound(Uuid::nil()))?;
         assert!(t.subtree_of(last)?.is_empty());
         Ok(())
     }

@@ -156,20 +156,18 @@ async fn open_pool(path: &std::path::Path) -> BranchResult<SqlitePool> {
 
 async fn count_table(pool: &SqlitePool, table: &str) -> BranchResult<i64> {
     // Check table exists first to avoid hard errors on empty snapshots.
-    let exists: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
-    )
-    .bind(table)
-    .fetch_one(pool)
-    .await?;
+    let exists: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?")
+            .bind(table)
+            .fetch_one(pool)
+            .await?;
 
     if exists == 0 {
         return Ok(0);
     }
 
-    let count: i64 =
-        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
-            .fetch_one(pool)
-            .await?;
+    let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+        .fetch_one(pool)
+        .await?;
     Ok(count)
 }

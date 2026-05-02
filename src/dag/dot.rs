@@ -1,10 +1,7 @@
 //! Graphviz DOT exporting for branch lineage graphs.
 
 use crate::{
-    branch::store::BranchStore,
-    dag::graph::DagGraph,
-    error::BranchResult,
-    types::BranchStatus,
+    branch::store::BranchStore, dag::graph::DagGraph, error::BranchResult, types::BranchStatus,
 };
 
 /// Exports the branch lineage graph as a Graphviz DOT string.
@@ -63,6 +60,8 @@ fn status_colors(status: &BranchStatus) -> (String, String) {
         BranchStatus::Merged { .. } => ("blue".to_string(), "lightblue".to_string()),
         BranchStatus::Discarded { .. } => ("red".to_string(), "lightpink".to_string()),
         BranchStatus::Archived => ("gray".to_string(), "lightgray".to_string()),
+        BranchStatus::Orphan => ("orange".to_string(), "moccasin".to_string()),
+        BranchStatus::Purged => ("black".to_string(), "white".to_string()),
     }
 }
 

@@ -1,7 +1,7 @@
 //! Agent scenario execution inside an isolated sandbox environment.
 
-use std::{future::Future, sync::Arc, time::Instant};
 use sqlx::SqlitePool;
+use std::{future::Future, sync::Arc, time::Instant};
 
 use crate::{
     config::BranchConfig,
@@ -52,7 +52,9 @@ impl SandboxRunner {
                     ops_executed: 1, // updated via track_op in production usage
                     duration_ms,
                 };
-                self.env.status = SandboxStatus::Completed { outcome: outcome.clone() };
+                self.env.status = SandboxStatus::Completed {
+                    outcome: outcome.clone(),
+                };
                 Ok(outcome)
             }
             Err(error) => {
@@ -88,7 +90,9 @@ impl SandboxRunner {
                     ops_executed: 1,
                     duration_ms: elapsed_ms,
                 };
-                self.env.status = SandboxStatus::Completed { outcome: outcome.clone() };
+                self.env.status = SandboxStatus::Completed {
+                    outcome: outcome.clone(),
+                };
                 Ok(outcome)
             }
             Ok(Err(error)) => {

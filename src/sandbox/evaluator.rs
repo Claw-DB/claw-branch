@@ -61,7 +61,11 @@ impl SandboxEvaluator {
         let threshold = config.divergence_threshold;
         let recommendation = recommend(&diff, &metrics, threshold);
 
-        Ok(EvaluationReport { diff, metrics, recommendation })
+        Ok(EvaluationReport {
+            diff,
+            metrics,
+            recommendation,
+        })
     }
 }
 

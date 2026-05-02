@@ -37,10 +37,7 @@ pub fn format_diff_human(diff: &DiffResult) -> String {
         "  compared_at : {}\n",
         diff.compared_at.format("%Y-%m-%d %H:%M:%S UTC")
     ));
-    out.push_str(&format!(
-        "  divergence  : {:.4}\n",
-        diff.divergence_score
-    ));
+    out.push_str(&format!("  divergence  : {:.4}\n", diff.divergence_score));
     out.push_str(&format!(
         "  stats       : +{} -{}  ~{}  ={}\n\n",
         diff.stats.added, diff.stats.removed, diff.stats.modified, diff.stats.unchanged
@@ -56,11 +53,7 @@ pub fn format_diff_human(diff: &DiffResult) -> String {
             DiffKind::Modified => "[~]",
             DiffKind::Unchanged => "[=]",
         };
-        out.push_str(&format!(
-            "{tag} {} ({:?})\n",
-            ed.entity_id,
-            ed.entity_type
-        ));
+        out.push_str(&format!("{tag} {} ({:?})\n", ed.entity_id, ed.entity_type));
         for fd in &ed.field_diffs {
             out.push_str(&format!("    {}\n", format_field_diff(fd)));
         }
@@ -94,8 +87,7 @@ pub fn summarise_diff(diff: &DiffResult) -> DiffSummary {
         }
     }
 
-    let is_identical =
-        diff.stats.added == 0 && diff.stats.removed == 0 && diff.stats.modified == 0;
+    let is_identical = diff.stats.added == 0 && diff.stats.removed == 0 && diff.stats.modified == 0;
 
     DiffSummary {
         added: diff.stats.added,
@@ -112,9 +104,6 @@ pub fn summarise_diff(diff: &DiffResult) -> DiffSummary {
 pub fn format_text(diff: &DiffResult) -> String {
     format!(
         "diff {} → {}: {} entities, divergence {:.3}",
-        diff.branch_a_id,
-        diff.branch_b_id,
-        diff.stats.total_entities,
-        diff.divergence_score
+        diff.branch_a_id, diff.branch_b_id, diff.stats.total_entities, diff.divergence_score
     )
 }

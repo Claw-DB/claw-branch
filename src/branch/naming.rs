@@ -8,52 +8,17 @@ pub struct NamingValidator;
 impl NamingValidator {
     /// Validates a branch name against reserved names and formatting rules.
     pub fn validate(name: &str) -> BranchResult<()> {
-        if name.is_empty() {
-            return Err(BranchError::NamingError("branch name cannot be empty".to_string()));
+        if name.is_empty() || name.len() > 128 {
+            return Err(BranchError::InvalidBranchName);
         }
-        if name.len() > 64 {
-            return Err(BranchError::NamingError(
-                "branch name must be 1-64 characters".to_string(),
-            ));
-        }
-        if name.chars().any(char::is_control) {
-            return Err(BranchError::NamingError(
-                "branch name cannot contain control characters".to_string(),
-            ));
-        }
-        if name.chars().any(char::is_whitespace) {
-            return Err(BranchError::NamingError(
-                "branch name cannot contain whitespace".to_string(),
-            ));
-        }
-        if matches!(name.chars().next(), Some('-' | '_' | '/')) {
-            return Err(BranchError::NamingError(
-                "branch name cannot start with '-', '_' or '/'".to_string(),
-            ));
-        }
-        if matches!(name.chars().last(), Some('-' | '_' | '/')) {
-            return Err(BranchError::NamingError(
-                "branch name cannot end with '-', '_' or '/'".to_string(),
-            ));
-        }
-        if name.contains("//") {
-            return Err(BranchError::NamingError(
-                "branch name cannot contain consecutive '/'".to_string(),
-            ));
-        }
-        if Self::is_reserved(name) {
-            return Err(BranchError::NamingError(format!(
-                "branch name '{name}' is reserved"
-            )));
+        if name.starts_with('/') || name.contains("..") {
+            return Err(BranchError::InvalidBranchName);
         }
         if !name
             .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '/'))
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '/' | '.' | '-'))
         {
-            return Err(BranchError::NamingError(
-                "branch name may only contain alphanumeric characters, '-', '_' or '/'"
-                    .to_string(),
-            ));
+            return Err(BranchError::InvalidBranchName);
         }
         Ok(())
     }
@@ -65,7 +30,7 @@ impl NamingValidator {
 
         for ch in name.chars().flat_map(char::to_lowercase) {
             match ch {
-                'a'..='z' | '0'..='9' | '_' | '/' => {
+                'a'..='z' | '0'..='9' | '_' | '/' | '.' => {
                     if ch == '/' && slug.ends_with('/') {
                         continue;
                     }
@@ -87,26 +52,32 @@ impl NamingValidator {
                 }
                 _ => {}
             }
-            if slug.len() >= 64 {
+            if slug.len() >= 128 {
                 break;
             }
         }
 
-        slug.truncate(64);
-        slug = slug.trim_matches(|ch| matches!(ch, '-' | '_' | '/')).to_string();
+        slug.truncate(128);
+        slug = slug
+            .trim_matches(|ch| matches!(ch, '-' | '_' | '/'))
+            .to_string();
         if slug.is_empty() {
             slug = "branch".to_string();
         }
         if Self::is_reserved(&slug) {
             slug.push_str("-branch");
         }
-        if slug.len() > 64 {
-            slug.truncate(64);
-            slug = slug.trim_matches(|ch| matches!(ch, '-' | '_' | '/')).to_string();
+        if slug.len() > 128 {
+            slug.truncate(128);
+            slug = slug
+                .trim_matches(|ch| matches!(ch, '-' | '_' | '/'))
+                .to_string();
         }
         if Self::validate(&slug).is_err() {
             slug = slug.replace('/', "-");
-            slug = slug.trim_matches(|ch| matches!(ch, '-' | '_' | '/')).to_string();
+            slug = slug
+                .trim_matches(|ch| matches!(ch, '-' | '_' | '/'))
+                .to_string();
         }
         if Self::validate(&slug).is_err() {
             "branch".to_string()
@@ -133,7 +104,10 @@ impl NamingValidator {
 
     /// Returns true when the name is reserved for trunk-like semantics.
     pub fn is_reserved(name: &str) -> bool {
-        matches!(name.to_ascii_lowercase().as_str(), "trunk" | "main" | "master" | "head")
+        matches!(
+            name.to_ascii_lowercase().as_str(),
+            "trunk" | "main" | "master" | "head"
+        )
     }
 
     /// Returns the namespace prefix for a namespaced branch name.
@@ -173,7 +147,7 @@ mod tests {
 
     #[test]
     fn rejects_too_long_name() {
-        let name = "a".repeat(65);
+        let name = "a".repeat(129);
         assert!(NamingValidator::validate(&name).is_err());
     }
 
@@ -188,13 +162,13 @@ mod tests {
     }
 
     #[test]
-    fn rejects_leading_hyphen() {
-        assert!(NamingValidator::validate("-bad").is_err());
+    fn accepts_leading_hyphen() {
+        assert!(NamingValidator::validate("-bad").is_ok());
     }
 
     #[test]
-    fn rejects_leading_underscore() {
-        assert!(NamingValidator::validate("_bad").is_err());
+    fn accepts_leading_underscore() {
+        assert!(NamingValidator::validate("_bad").is_ok());
     }
 
     #[test]
@@ -203,33 +177,38 @@ mod tests {
     }
 
     #[test]
-    fn rejects_trailing_hyphen() {
-        assert!(NamingValidator::validate("bad-").is_err());
+    fn accepts_trailing_hyphen() {
+        assert!(NamingValidator::validate("bad-").is_ok());
     }
 
     #[test]
-    fn rejects_trailing_underscore() {
-        assert!(NamingValidator::validate("bad_").is_err());
+    fn accepts_trailing_underscore() {
+        assert!(NamingValidator::validate("bad_").is_ok());
     }
 
     #[test]
-    fn rejects_trailing_slash() {
-        assert!(NamingValidator::validate("bad/").is_err());
+    fn accepts_trailing_slash() {
+        assert!(NamingValidator::validate("bad/").is_ok());
     }
 
     #[test]
-    fn rejects_double_slash() {
-        assert!(NamingValidator::validate("exp//bad").is_err());
+    fn accepts_double_slash() {
+        assert!(NamingValidator::validate("exp//bad").is_ok());
     }
 
     #[test]
-    fn rejects_reserved_trunk() {
-        assert!(NamingValidator::validate("trunk").is_err());
+    fn accepts_reserved_trunk() {
+        assert!(NamingValidator::validate("trunk").is_ok());
     }
 
     #[test]
-    fn rejects_reserved_main_case_insensitive() {
-        assert!(NamingValidator::validate("MAIN").is_err());
+    fn accepts_reserved_main_case_insensitive() {
+        assert!(NamingValidator::validate("MAIN").is_ok());
+    }
+
+    #[test]
+    fn rejects_dot_dot_sequences() {
+        assert!(NamingValidator::validate("feature/../escape").is_err());
     }
 
     #[test]
@@ -239,7 +218,10 @@ mod tests {
 
     #[test]
     fn slugifies_spaces_and_case() {
-        assert_eq!(NamingValidator::slugify("Experiment Pricing V2"), "experiment-pricing-v2");
+        assert_eq!(
+            NamingValidator::slugify("Experiment Pricing V2"),
+            "experiment-pricing-v2"
+        );
     }
 
     #[test]
@@ -249,7 +231,10 @@ mod tests {
 
     #[test]
     fn slugify_preserves_namespace() {
-        assert_eq!(NamingValidator::slugify("Experiment/Pricing V2"), "experiment/pricing-v2");
+        assert_eq!(
+            NamingValidator::slugify("Experiment/Pricing V2"),
+            "experiment/pricing-v2"
+        );
     }
 
     #[test]
@@ -276,7 +261,10 @@ mod tests {
 
     #[test]
     fn namespace_returns_prefix() {
-        assert_eq!(NamingValidator::namespace("experiment/pricing-v2"), Some("experiment"));
+        assert_eq!(
+            NamingValidator::namespace("experiment/pricing-v2"),
+            Some("experiment")
+        );
     }
 
     #[test]
@@ -286,7 +274,10 @@ mod tests {
 
     #[test]
     fn short_name_returns_last_segment() {
-        assert_eq!(NamingValidator::short_name("experiment/pricing-v2"), "pricing-v2");
+        assert_eq!(
+            NamingValidator::short_name("experiment/pricing-v2"),
+            "pricing-v2"
+        );
     }
 
     #[test]

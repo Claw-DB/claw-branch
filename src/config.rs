@@ -1,6 +1,9 @@
 //! Branch engine configuration and environment loading.
 
-use std::{env, fs, path::{Path, PathBuf}};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -64,7 +67,9 @@ impl BranchConfig {
         let workspace_id = env::var("CLAW_BRANCH_WORKSPACE_ID")
             .ok()
             .and_then(|value| Uuid::parse_str(&value).ok())
-            .ok_or_else(|| BranchError::NamingError("missing or invalid CLAW_BRANCH_WORKSPACE_ID".to_string()))?;
+            .ok_or_else(|| {
+                BranchError::NamingError("missing or invalid CLAW_BRANCH_WORKSPACE_ID".to_string())
+            })?;
         let branches_dir = env::var("CLAW_BRANCH_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("./branches"));
@@ -84,13 +89,18 @@ impl BranchConfig {
                 "CLAW_BRANCH_GC_ORPHAN_THRESHOLD",
                 86400_u64,
             )?)
-            .divergence_threshold(parse_env_or_default("CLAW_BRANCH_DIVERGENCE_THRESHOLD", 0.8_f64)?)
+            .divergence_threshold(parse_env_or_default(
+                "CLAW_BRANCH_DIVERGENCE_THRESHOLD",
+                0.8_f64,
+            )?)
             .auto_metrics(parse_env_or_default("CLAW_BRANCH_AUTO_METRICS", true)?)
             .metrics_refresh_interval_secs(parse_env_or_default(
                 "CLAW_BRANCH_METRICS_REFRESH_INTERVAL",
                 300_u64,
             )?)
-            .trunk_branch_name(env::var("CLAW_BRANCH_TRUNK_NAME").unwrap_or_else(|_| "trunk".to_string()))
+            .trunk_branch_name(
+                env::var("CLAW_BRANCH_TRUNK_NAME").unwrap_or_else(|_| "trunk".to_string()),
+            )
             .build()
     }
 
@@ -191,7 +201,9 @@ impl BranchConfigBuilder {
     /// Builds and validates the final configuration.
     pub fn build(self) -> BranchResult<BranchConfig> {
         let workspace_id = self.workspace_id.unwrap_or_default();
-        let branches_dir = self.branches_dir.unwrap_or_else(|| PathBuf::from("./branches"));
+        let branches_dir = self
+            .branches_dir
+            .unwrap_or_else(|| PathBuf::from("./branches"));
         let registry_db_path = self
             .registry_db_path
             .unwrap_or_else(|| branches_dir.join("branch_registry.db"));
@@ -199,7 +211,9 @@ impl BranchConfigBuilder {
         let divergence_threshold = self.divergence_threshold.unwrap_or(0.8);
 
         if workspace_id.is_nil() {
-            return Err(BranchError::NamingError("workspace_id must not be nil".to_string()));
+            return Err(BranchError::NamingError(
+                "workspace_id must not be nil".to_string(),
+            ));
         }
         if max_branches_per_workspace < 1 {
             return Err(BranchError::NamingError(
@@ -231,7 +245,9 @@ impl BranchConfigBuilder {
             divergence_threshold,
             auto_metrics: self.auto_metrics.unwrap_or(true),
             metrics_refresh_interval_secs: self.metrics_refresh_interval_secs.unwrap_or(300),
-            trunk_branch_name: self.trunk_branch_name.unwrap_or_else(|| "trunk".to_string()),
+            trunk_branch_name: self
+                .trunk_branch_name
+                .unwrap_or_else(|| "trunk".to_string()),
         })
     }
 }

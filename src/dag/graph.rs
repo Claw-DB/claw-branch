@@ -14,7 +14,10 @@ use petgraph::{
 };
 use uuid::Uuid;
 
-use crate::{config::BranchConfig, error::{BranchError, BranchResult}};
+use crate::{
+    config::BranchConfig,
+    error::{BranchError, BranchResult},
+};
 
 /// Metadata stored on each directed edge in the branch lineage DAG.
 #[derive(Debug, Clone)]
@@ -201,7 +204,11 @@ impl DagGraph {
             return Ok(Some(a));
         }
         let a_ancestors = self.ancestors_of(a)?;
-        let a_set: HashSet<Uuid> = a_ancestors.iter().copied().chain(std::iter::once(a)).collect();
+        let a_set: HashSet<Uuid> = a_ancestors
+            .iter()
+            .copied()
+            .chain(std::iter::once(a))
+            .collect();
         if a_set.contains(&b) {
             return Ok(Some(b));
         }
@@ -270,8 +277,8 @@ impl DagGraph {
         while let Some(node) = queue.pop_front() {
             let d = depth_map[&node];
             for child in inner.graph.neighbors_directed(node, Direction::Outgoing) {
-                if !depth_map.contains_key(&child) {
-                    depth_map.insert(child, d + 1);
+                if let std::collections::hash_map::Entry::Vacant(entry) = depth_map.entry(child) {
+                    entry.insert(d + 1);
                     queue.push_back(child);
                 }
             }
@@ -288,10 +295,10 @@ impl DagGraph {
         inner
             .graph
             .edge_indices()
-            .map(|e| {
-                let (src, dst) = inner.graph.edge_endpoints(e).expect("edge has endpoints");
+            .filter_map(|e| {
+                let (src, dst) = inner.graph.edge_endpoints(e)?;
                 let meta = inner.graph[e].clone();
-                (inner.graph[src], inner.graph[dst], meta)
+                Some((inner.graph[src], inner.graph[dst], meta))
             })
             .collect()
     }

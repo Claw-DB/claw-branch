@@ -11,6 +11,18 @@ pub type BranchResult<T> = Result<T, BranchError>;
 /// Enumerates errors produced by branching, snapshotting, merging, and metrics code.
 #[derive(Debug, Error)]
 pub enum BranchError {
+    /// Indicates a runtime configuration is invalid.
+    #[error("invalid config: {0}")]
+    InvalidConfig(String),
+    /// Indicates permission checks denied the operation.
+    #[error("permission denied: {0}")]
+    PermissionDenied(String),
+    /// Indicates a branch name failed strict path-safe validation.
+    #[error("invalid branch name")]
+    InvalidBranchName,
+    /// Indicates the workspace has reached its configured branch limit.
+    #[error("branch limit exceeded")]
+    BranchLimitExceeded,
     /// Wraps SQLx database failures.
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
@@ -53,6 +65,14 @@ pub enum BranchError {
         /// The path to the corrupt snapshot file.
         path: PathBuf,
     },
+    /// Indicates a required snapshot hash sidecar file is missing.
+    #[error("snapshot hash missing for branch {branch_id} at {path:?}")]
+    SnapshotHashMissing {
+        /// The branch identifier associated with the missing hash sidecar.
+        branch_id: Uuid,
+        /// The path to the expected sidecar hash file.
+        path: PathBuf,
+    },
     /// Indicates merge conflicts were not fully resolved.
     #[error("merge conflicts unresolved for entities: {entity_ids:?}")]
     MergeConflictUnresolved {
@@ -72,6 +92,14 @@ pub enum BranchError {
     /// Indicates a lineage edge would create a DAG cycle.
     #[error("dag cycle detected from {from} to {to}")]
     DagCycle {
+        /// The proposed source branch id.
+        from: Uuid,
+        /// The proposed destination branch id.
+        to: Uuid,
+    },
+    /// Indicates a branch operation would introduce a lineage cycle.
+    #[error("cycle detected from {from} to {to}")]
+    CycleDetected {
         /// The proposed source branch id.
         from: Uuid,
         /// The proposed destination branch id.
@@ -130,12 +158,18 @@ impl BranchError {
     pub fn is_snapshot_error(&self) -> bool {
         matches!(
             self,
-            Self::SnapshotFailed { .. } | Self::SnapshotCorrupt { .. } | Self::OrphanedSnapshot(_)
+            Self::SnapshotFailed { .. }
+                | Self::SnapshotCorrupt { .. }
+                | Self::SnapshotHashMissing { .. }
+                | Self::OrphanedSnapshot(_)
         )
     }
 
     /// Returns true if this error belongs to DAG management.
     pub fn is_dag_error(&self) -> bool {
-        matches!(self, Self::DagCycle { .. } | Self::DagNodeNotFound(_))
+        matches!(
+            self,
+            Self::DagCycle { .. } | Self::CycleDetected { .. } | Self::DagNodeNotFound(_)
+        )
     }
 }

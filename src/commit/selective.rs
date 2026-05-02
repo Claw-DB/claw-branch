@@ -39,7 +39,11 @@ pub struct SelectiveCommit {
 impl SelectiveCommit {
     /// Creates a new selective commit executor with pre-opened pools.
     pub fn new(source_pool: SqlitePool, target_pool: SqlitePool, store: Arc<BranchStore>) -> Self {
-        Self { source_pool, target_pool, store }
+        Self {
+            source_pool,
+            target_pool,
+            store,
+        }
     }
 
     /// Opens a `SelectiveCommit` from branch metadata (opens pools internally).
@@ -53,7 +57,11 @@ impl SelectiveCommit {
         let target = store.get(target_id).await?;
         let source_pool = open_pool(&source.db_path, true).await?;
         let target_pool = open_pool(&target.db_path, false).await?;
-        Ok(Self { source_pool, target_pool, store })
+        Ok(Self {
+            source_pool,
+            target_pool,
+            store,
+        })
     }
 
     /// Applies a cherry-pick to the target branch within a single transaction.
@@ -108,10 +116,8 @@ impl SelectiveCommit {
                         .get(entity_id)
                         .cloned()
                         .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
-                    if let (
-                        Some(merged_obj),
-                        Some(source_obj),
-                    ) = (merged.as_object_mut(), source_val.as_object())
+                    if let (Some(merged_obj), Some(source_obj)) =
+                        (merged.as_object_mut(), source_val.as_object())
                     {
                         for f in fields {
                             if let Some(v) = source_obj.get(f) {
@@ -127,13 +133,8 @@ impl SelectiveCommit {
                     source_val
                 };
 
-                upsert_entity_tx(
-                    &mut tx,
-                    sel.entity_type.table_name(),
-                    entity_id,
-                    &final_val,
-                )
-                .await?;
+                upsert_entity_tx(&mut tx, sel.entity_type.table_name(), entity_id, &final_val)
+                    .await?;
                 committed_entity_count += 1;
                 all_entity_ids.push(entity_id.clone());
             }
@@ -145,7 +146,10 @@ impl SelectiveCommit {
         let entry = CommitLogEntry {
             id: Uuid::new_v4(),
             branch_id: cherry.target_branch_id,
-            entity_type: cherry.entity_selections.first().map(|s| s.entity_type.clone()),
+            entity_type: cherry
+                .entity_selections
+                .first()
+                .map(|s| s.entity_type.clone()),
             entity_ids: all_entity_ids,
             op_kind: "cherry_pick".to_string(),
             committed_at: Utc::now(),
@@ -225,7 +229,8 @@ async fn upsert_entity_tx(
 
     let mut args = sqlx::sqlite::SqliteArguments::default();
     for v in &values {
-        args.add(v.clone());
+        args.add(v.clone())
+            .map_err(|error| BranchError::InvalidConfig(format!("invalid sqlite arg: {error}")))?;
     }
     sqlx::query_with(&sql, args).execute(&mut **tx).await?;
     Ok(())

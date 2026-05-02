@@ -1,6 +1,9 @@
 //! Pre-commit validation for cherry-pick operations.
 
-use sqlx::{sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions}, SqlitePool};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+    SqlitePool,
+};
 
 use crate::{
     commit::cherry::CherryPick,
@@ -107,9 +110,9 @@ impl CommitValidator {
             }
 
             for entity_id in &sel.entity_ids {
-                let exists: bool = sqlx::query_scalar::<_, i64>(
-                    &format!("SELECT COUNT(*) FROM {table} WHERE id = ?"),
-                )
+                let exists: bool = sqlx::query_scalar::<_, i64>(&format!(
+                    "SELECT COUNT(*) FROM {table} WHERE id = ?"
+                ))
                 .bind(entity_id)
                 .fetch_one(&self.pool)
                 .await
@@ -119,15 +122,17 @@ impl CommitValidator {
                 if !exists {
                     violations.push(format!(
                         "entity '{}' of type {:?} not found in source branch {}",
-                        entity_id,
-                        sel.entity_type,
-                        source.id
+                        entity_id, sel.entity_type, source.id
                     ));
                 }
             }
         }
 
         let ok = violations.is_empty();
-        Ok(ValidationReport { ok, violations, warnings })
+        Ok(ValidationReport {
+            ok,
+            violations,
+            warnings,
+        })
     }
 }

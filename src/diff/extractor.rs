@@ -6,7 +6,10 @@ use std::{
 };
 
 use chrono::Utc;
-use sqlx::{Row, sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteJournalMode}, SqlitePool};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+    Row, SqlitePool,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -129,9 +132,7 @@ impl DiffExtractor {
                 diff_kind: DiffKind::Added,
                 field_diffs: Vec::new(),
             },
-            (Some(va), Some(vb)) => {
-                compare_entity_values(entity_id, entity_type.clone(), va, vb)
-            }
+            (Some(va), Some(vb)) => compare_entity_values(entity_id, entity_type.clone(), va, vb),
             (None, None) => EntityDiff {
                 entity_id: entity_id.to_string(),
                 entity_type: entity_type.clone(),
@@ -209,8 +210,7 @@ fn compare_entity_values(
     let a_obj = a.as_object().cloned().unwrap_or_default();
     let b_obj = b.as_object().cloned().unwrap_or_default();
 
-    let all_fields: HashSet<String> =
-        a_obj.keys().chain(b_obj.keys()).cloned().collect();
+    let all_fields: HashSet<String> = a_obj.keys().chain(b_obj.keys()).cloned().collect();
 
     let mut field_diffs: Vec<FieldDiff> = Vec::new();
     for field in &all_fields {

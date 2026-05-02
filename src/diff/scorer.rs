@@ -17,9 +17,8 @@ impl DivergenceScorer {
     /// `total_entities_base` is the entity count on the base (reference) branch.
     /// A score of `0.0` means identical; `1.0` means maximally diverged.
     pub fn score(diff: &DiffResult, total_entities_base: u64) -> f64 {
-        let numerator = diff.stats.added as f64
-            + diff.stats.removed as f64
-            + diff.stats.modified as f64 * 0.5;
+        let numerator =
+            diff.stats.added as f64 + diff.stats.removed as f64 + diff.stats.modified as f64 * 0.5;
         let denominator = total_entities_base.max(1) as f64;
         (numerator / denominator).clamp(0.0, 1.0)
     }
@@ -47,9 +46,7 @@ impl DivergenceScorer {
             (serde_json::Value::Object(oa), serde_json::Value::Object(ob)) => {
                 object_similarity(oa, ob)
             }
-            (serde_json::Value::Array(aa), serde_json::Value::Array(ab)) => {
-                array_jaccard(aa, ab)
-            }
+            (serde_json::Value::Array(aa), serde_json::Value::Array(ab)) => array_jaccard(aa, ab),
             _ => 0.0, // type mismatch or null
         }
     }

@@ -1,6 +1,9 @@
 //! Snapshot manifests capture hashes, counts, and SQLite metadata for branch files.
 
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

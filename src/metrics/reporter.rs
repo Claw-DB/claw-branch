@@ -3,11 +3,7 @@
 use chrono::Utc;
 use uuid::Uuid;
 
-use crate::{
-    branch::store::BranchStore,
-    error::BranchResult,
-    types::WorkspaceReport,
-};
+use crate::{branch::store::BranchStore, error::BranchResult, types::WorkspaceReport};
 
 /// Aggregates metrics across all live branches in a workspace.
 ///
@@ -32,10 +28,7 @@ impl MetricsReporter {
         store: &BranchStore,
     ) -> BranchResult<WorkspaceReport> {
         let branches = store.list(workspace_id, None).await?;
-        let live: Vec<_> = branches
-            .iter()
-            .filter(|b| b.status.is_live())
-            .collect();
+        let live: Vec<_> = branches.iter().filter(|b| b.status.is_live()).collect();
 
         let branch_count = live.len() as u32;
         let total_disk_bytes: u64 = live.iter().map(|b| b.metrics.bytes_on_disk).sum();
@@ -46,10 +39,7 @@ impl MetricsReporter {
             live.iter().map(|b| b.metrics.divergence_score).sum::<f64>() / live.len() as f64
         };
 
-        let most_active_branch = live
-            .iter()
-            .max_by_key(|b| b.metrics.op_count)
-            .map(|b| b.id);
+        let most_active_branch = live.iter().max_by_key(|b| b.metrics.op_count).map(|b| b.id);
 
         let stale_cutoff = Utc::now() - chrono::Duration::days(7);
         let stale_branch_ids: Vec<Uuid> = live

@@ -1,17 +1,28 @@
 //! Snapshot copying for isolated per-branch SQLite databases.
 
-use std::{path::{Path, PathBuf}, sync::Arc, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Instant,
+};
 
 use chrono::Utc;
-use sqlx::{sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions}, Row};
-use tempfile::NamedTempFile;
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+    Row,
+};
 use tracing::info;
 use uuid::Uuid;
 
 use crate::{
     config::BranchConfig,
     error::{BranchError, BranchResult},
-    snapshot::{manifest::{EntityCounts, SnapshotManifest}, verifier::{hash_file_blake3, verify_snapshot}},
+    snapshot::{
+        manifest::{EntityCounts, SnapshotManifest},
+        verifier::{
+            hash_file_blake3, sidecar_hash_path_for_db, verify_snapshot, write_sidecar_hash,
+        },
+    },
 };
 
 /// Creates snapshot-backed branch SQLite files using full-file copy semantics.
@@ -50,12 +61,11 @@ impl SnapshotCopier {
         let source_hash = hash_file_blake3(source_db_path)?;
         let destination_dir = self.snapshot_dir_for(branch_id);
         let destination_path = self.snapshot_path_for(branch_id);
+        let temp_destination_path = destination_path.with_extension("db.tmp");
         tokio::fs::create_dir_all(&destination_dir).await?;
 
-        let temp_file = NamedTempFile::new_in(&destination_dir)?;
-        let temp_path = temp_file.into_temp_path();
-        tokio::fs::copy(source_db_path, &temp_path).await?;
-        temp_path.persist(&destination_path).map_err(|error| BranchError::Io(error.error))?;
+        tokio::fs::copy(source_db_path, &temp_destination_path).await?;
+        tokio::fs::rename(&temp_destination_path, &destination_path).await?;
 
         let destination_pool = SqlitePoolOptions::new()
             .max_connections(1)
@@ -83,6 +93,7 @@ impl SnapshotCopier {
                 reason: "source and destination snapshot hashes differ".to_string(),
             });
         }
+        write_sidecar_hash(&sidecar_hash_path_for_db(&destination_path), &snapshot_hash)?;
 
         let schema_version = sqlx::query("PRAGMA user_version")
             .fetch_one(&destination_pool)
@@ -142,12 +153,9 @@ impl SnapshotCopier {
         if let Some(parent) = target_db_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        let temp_file = NamedTempFile::new_in(
-            target_db_path.parent().unwrap_or_else(|| Path::new(".")),
-        )?;
-        let temp_path = temp_file.into_temp_path();
+        let temp_path = target_db_path.with_extension("db.tmp");
         tokio::fs::copy(snapshot_path, &temp_path).await?;
-        temp_path.persist(target_db_path).map_err(|error| BranchError::Io(error.error))?;
+        tokio::fs::rename(&temp_path, target_db_path).await?;
         Ok(())
     }
 
@@ -170,4 +178,36 @@ impl SnapshotCopier {
     pub fn snapshot_dir_for(&self, branch_id: Uuid) -> PathBuf {
         self.config.branches_dir.join(branch_id.to_string())
     }
+}
+
+/// Deletes any stale `.tmp` files under the branches directory at startup.
+pub async fn cleanup_incomplete_tmp_files(branches_dir: &Path) -> BranchResult<()> {
+    let mut dirs = match tokio::fs::read_dir(branches_dir).await {
+        Ok(value) => value,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+
+    while let Some(dir_entry) = dirs.next_entry().await? {
+        let dir_path = dir_entry.path();
+        if !dir_entry.file_type().await?.is_dir() {
+            continue;
+        }
+        let mut nested = tokio::fs::read_dir(&dir_path).await?;
+        while let Some(file_entry) = nested.next_entry().await? {
+            let file_path = file_entry.path();
+            if !file_entry.file_type().await?.is_file() {
+                continue;
+            }
+            let is_tmp = file_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext == "tmp");
+            if is_tmp {
+                let _ = tokio::fs::remove_file(file_path).await;
+            }
+        }
+    }
+
+    Ok(())
 }

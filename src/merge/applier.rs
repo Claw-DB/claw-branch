@@ -1,6 +1,6 @@
 //! Merge result application to a target branch database.
 
-use sqlx::{Arguments, SqlitePool, sqlite::SqliteArguments};
+use sqlx::{sqlite::SqliteArguments, Arguments, SqlitePool};
 
 use crate::{
     error::{BranchError, BranchResult},
@@ -41,9 +41,7 @@ impl MergeApplier {
                 let value = reconstruct_from_field_diffs(diff);
                 self.apply_value(&entity_type, diff, value).await
             }
-            ResolvedValue::Merged(value) => {
-                self.apply_value(&entity_type, diff, value).await
-            }
+            ResolvedValue::Merged(value) => self.apply_value(&entity_type, diff, value).await,
         }
     }
 
@@ -176,7 +174,8 @@ fn build_upsert_sql(
 
     let mut args = SqliteArguments::default();
     for v in &values {
-        args.add(json_to_sqlite_str(v));
+        args.add(json_to_sqlite_str(v))
+            .map_err(|error| BranchError::InvalidConfig(format!("invalid sqlite arg: {error}")))?;
     }
 
     Ok((sql, args))

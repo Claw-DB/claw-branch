@@ -10,5 +10,7 @@ pub mod scorer;
 pub mod types;
 
 pub use extractor::DiffExtractor;
-pub use formatter::{DiffSummary, format_diff_human, format_diff_json, format_field_diff, summarise_diff};
+pub use formatter::{
+    format_diff_human, format_diff_json, format_field_diff, summarise_diff, DiffSummary,
+};
 pub use scorer::DivergenceScorer;

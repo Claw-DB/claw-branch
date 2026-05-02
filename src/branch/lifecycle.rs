@@ -4,7 +4,10 @@ use std::{path::Path, sync::Arc};
 
 use chrono::Utc;
 use serde_json::json;
-use sqlx::{sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions}, Row};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+    Row,
+};
 use tracing::info;
 use uuid::Uuid;
 
@@ -43,7 +46,11 @@ impl BranchLifecycle {
     }
 
     /// Creates the root trunk branch from an existing source database.
-    pub async fn create_trunk(&self, workspace_id: Uuid, source_db_path: &Path) -> BranchResult<Branch> {
+    pub async fn create_trunk(
+        &self,
+        workspace_id: Uuid,
+        source_db_path: &Path,
+    ) -> BranchResult<Branch> {
         let branch_id = Uuid::new_v4();
         let manifest = self
             .copier
@@ -81,7 +88,12 @@ impl BranchLifecycle {
     }
 
     /// Forks a live parent branch into a new active branch.
-    pub async fn fork(&self, parent_id: Uuid, name: &str, description: Option<&str>) -> BranchResult<Branch> {
+    pub async fn fork(
+        &self,
+        parent_id: Uuid,
+        name: &str,
+        description: Option<&str>,
+    ) -> BranchResult<Branch> {
         let parent = self.store.get(parent_id).await?;
         if !parent.status.is_live() {
             return Err(BranchError::BranchNotActive {
@@ -89,10 +101,10 @@ impl BranchLifecycle {
                 status: parent.status.kind().to_string(),
             });
         }
-        if self.store.count(parent.workspace_id).await? >= self.config.max_branches_per_workspace as u64 {
-            return Err(BranchError::NamingError(
-                "workspace reached max_branches_per_workspace".to_string(),
-            ));
+        if self.store.count_active(parent.workspace_id).await?
+            >= self.config.max_branches_per_workspace as u64
+        {
+            return Err(BranchError::BranchLimitExceeded);
         }
         NamingValidator::validate(name)?;
 
@@ -126,7 +138,10 @@ impl BranchLifecycle {
         let forked_from_cursor = Some(cursor_row.try_get::<i64, _>(0)?.to_string());
 
         let branch_id = Uuid::new_v4();
-        let manifest = self.copier.create_snapshot(&parent.db_path, branch_id, name).await?;
+        let manifest = self
+            .copier
+            .create_snapshot(&parent.db_path, branch_id, name)
+            .await?;
         let now = Utc::now();
         let branch = Branch {
             id: branch_id,
@@ -202,7 +217,12 @@ impl BranchLifecycle {
             });
         }
         self.store
-            .update_status(id, BranchStatus::Discarded { discarded_at: Utc::now() })
+            .update_status(
+                id,
+                BranchStatus::Discarded {
+                    discarded_at: Utc::now(),
+                },
+            )
             .await?;
         info!(branch_id = %id, "discarded branch");
         Ok(())

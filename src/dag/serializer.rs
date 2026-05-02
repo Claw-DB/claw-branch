@@ -3,7 +3,10 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use sqlx::{Row, SqlitePool, sqlite::{SqliteConnectOptions, SqlitePoolOptions}};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    Row, SqlitePool,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -93,14 +96,12 @@ impl DagSerializer {
         child_id: Uuid,
         cursor: &str,
     ) -> BranchResult<()> {
-        sqlx::query(
-            "UPDATE dag_edges SET merge_cursor = ? WHERE parent_id = ? AND child_id = ?",
-        )
-        .bind(cursor)
-        .bind(parent_id.to_string())
-        .bind(child_id.to_string())
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("UPDATE dag_edges SET merge_cursor = ? WHERE parent_id = ? AND child_id = ?")
+            .bind(cursor)
+            .bind(parent_id.to_string())
+            .bind(child_id.to_string())
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -110,12 +111,10 @@ impl DagSerializer {
     pub async fn load_graph(&self, workspace_id: Uuid) -> BranchResult<DagGraph> {
         let workspace_str = workspace_id.to_string();
 
-        let node_rows = sqlx::query(
-            "SELECT branch_id FROM dag_nodes WHERE workspace_id = ?",
-        )
-        .bind(&workspace_str)
-        .fetch_all(&self.pool)
-        .await?;
+        let node_rows = sqlx::query("SELECT branch_id FROM dag_nodes WHERE workspace_id = ?")
+            .bind(&workspace_str)
+            .fetch_all(&self.pool)
+            .await?;
 
         let edge_rows = sqlx::query(
             "SELECT e.parent_id, e.child_id, e.forked_at, e.merge_cursor \
@@ -144,12 +143,10 @@ impl DagSerializer {
         }
         let mut edges: Vec<EdgeRecord> = Vec::with_capacity(edge_rows.len());
         for row in &edge_rows {
-            let parent_id = Uuid::parse_str(&row.try_get::<String, _>("parent_id")?).map_err(|e| {
-                BranchError::SandboxError(format!("invalid parent UUID: {e}"))
-            })?;
-            let child_id = Uuid::parse_str(&row.try_get::<String, _>("child_id")?).map_err(|e| {
-                BranchError::SandboxError(format!("invalid child UUID: {e}"))
-            })?;
+            let parent_id = Uuid::parse_str(&row.try_get::<String, _>("parent_id")?)
+                .map_err(|e| BranchError::SandboxError(format!("invalid parent UUID: {e}")))?;
+            let child_id = Uuid::parse_str(&row.try_get::<String, _>("child_id")?)
+                .map_err(|e| BranchError::SandboxError(format!("invalid child UUID: {e}")))?;
             let forked_at = DateTime::parse_from_rfc3339(&row.try_get::<String, _>("forked_at")?)
                 .map(|dt| dt.with_timezone(&Utc))
                 .map_err(|e| BranchError::SandboxError(format!("invalid forked_at: {e}")))?;
@@ -157,7 +154,10 @@ impl DagSerializer {
             edges.push(EdgeRecord {
                 parent_id,
                 child_id,
-                meta: EdgeMeta { forked_at, merge_cursor: cursor },
+                meta: EdgeMeta {
+                    forked_at,
+                    merge_cursor: cursor,
+                },
             });
         }
 
@@ -169,7 +169,10 @@ impl DagSerializer {
             std::collections::HashMap::new();
         for (i, e) in edges.iter().enumerate() {
             out_edges.entry(e.parent_id).or_default().push(i);
-            in_degree.entry(e.child_id).and_modify(|d| *d += 1).or_insert(1);
+            in_degree
+                .entry(e.child_id)
+                .and_modify(|d| *d += 1)
+                .or_insert(1);
             in_degree.entry(e.parent_id).or_insert(0);
         }
 

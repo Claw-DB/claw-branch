@@ -61,6 +61,10 @@ pub enum BranchStatus {
     },
     /// The branch has been archived for later recovery.
     Archived,
+    /// The branch is detached from lineage and eligible for cleanup.
+    Orphan,
+    /// The branch data has been purged from disk and registry lifecycle.
+    Purged,
 }
 
 impl BranchStatus {
@@ -82,6 +86,8 @@ impl BranchStatus {
             Self::Merged { .. } => "merged",
             Self::Discarded { .. } => "discarded",
             Self::Archived => "archived",
+            Self::Orphan => "orphan",
+            Self::Purged => "purged",
         }
     }
 
@@ -91,6 +97,8 @@ impl BranchStatus {
             Self::Active => "active".to_string(),
             Self::Dormant => "dormant".to_string(),
             Self::Archived => "archived".to_string(),
+            Self::Orphan => "orphan".to_string(),
+            Self::Purged => "purged".to_string(),
             Self::Merged {
                 merged_into,
                 merged_at,
@@ -105,11 +113,15 @@ impl BranchStatus {
             "active" => Some(Self::Active),
             "dormant" => Some(Self::Dormant),
             "archived" => Some(Self::Archived),
+            "orphan" => Some(Self::Orphan),
+            "purged" => Some(Self::Purged),
             _ if value.starts_with("merged:") => {
                 let mut parts = value.splitn(3, ':');
                 let _ = parts.next();
                 let merged_into = parts.next().and_then(|part| Uuid::parse_str(part).ok())?;
-                let merged_at = parts.next().and_then(|part| part.parse::<DateTime<Utc>>().ok())?;
+                let merged_at = parts
+                    .next()
+                    .and_then(|part| part.parse::<DateTime<Utc>>().ok())?;
                 Some(Self::Merged {
                     merged_into,
                     merged_at,
@@ -280,7 +292,7 @@ impl EntityType {
     }
 
     /// Parses a string representation into an entity type.
-    pub fn from_str(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Option<Self> {
         match value {
             "memory_record" | "memory_records" => Some(Self::MemoryRecord),
             "session" | "sessions" => Some(Self::Session),
