@@ -17,9 +17,17 @@ pub enum BranchError {
     /// Indicates permission checks denied the operation.
     #[error("permission denied: {0}")]
     PermissionDenied(String),
+    /// Indicates branch data escaped workspace-scoped query isolation.
+    #[error("workspace isolation violation: expected {expected}, found {found}")]
+    WorkspaceIsolationViolation {
+        /// The expected workspace id configured for this engine.
+        expected: Uuid,
+        /// The unexpected workspace id returned by persistence.
+        found: Uuid,
+    },
     /// Indicates a branch name failed strict path-safe validation.
-    #[error("invalid branch name")]
-    InvalidBranchName,
+    #[error("invalid branch name: {0}")]
+    InvalidBranchName(String),
     /// Indicates the workspace has reached its configured branch limit.
     #[error("branch limit exceeded")]
     BranchLimitExceeded,

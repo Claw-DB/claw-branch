@@ -23,7 +23,7 @@ Traditional branch workflows in application databases are hard to make determini
 
 ```toml
 [dependencies]
-claw-branch = "0.1.1"
+claw-branch = "0.1.2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -31,8 +31,11 @@ Optional guarded mode (integrates with `claw-guard` policy checks):
 
 ```toml
 [dependencies]
-claw-branch = { version = "0.1.1", features = ["guarded"] }
+claw-branch = { version = "0.1.2", features = ["guarded"] }
 ```
+
+Production recommendation: use `GuardedBranchEngine` for built-in session and policy checks.
+`BranchEngine` remains the bare engine for environments that already enforce auth externally.
 
 ## Feature flags
 

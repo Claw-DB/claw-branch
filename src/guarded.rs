@@ -16,8 +16,8 @@ use crate::{
 /// # Example
 /// ```rust,ignore
 /// # use claw_branch::{BranchEngine, GuardedBranchEngine};
-/// # use claw_guard::{ClawSession, Guard};
-/// # async fn demo(engine: BranchEngine, guard: Guard, session: ClawSession) -> Result<(), Box<dyn std::error::Error>> {
+/// # use claw_guard::{Guard, GuardSession};
+/// # async fn demo(engine: BranchEngine, guard: Guard, session: GuardSession) -> Result<(), Box<dyn std::error::Error>> {
 /// let guarded = GuardedBranchEngine::new(engine, guard);
 /// let _branch = guarded.fork_trunk(&session, "feature/demo").await?;
 /// # Ok(())
@@ -41,7 +41,7 @@ impl GuardedBranchEngine {
     #[tracing::instrument(skip(self, session), fields(workspace_id = %self.inner.config().workspace_id))]
     pub async fn fork_trunk(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         name: &str,
     ) -> BranchResult<Branch> {
         self.check_write(session, "branch:fork_trunk").await?;
@@ -52,7 +52,7 @@ impl GuardedBranchEngine {
     #[tracing::instrument(skip(self, session), fields(workspace_id = %self.inner.config().workspace_id, branch_id = %parent_id))]
     pub async fn fork(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         parent_id: Uuid,
         name: &str,
     ) -> BranchResult<Branch> {
@@ -64,7 +64,7 @@ impl GuardedBranchEngine {
     #[tracing::instrument(skip(self, session), fields(workspace_id = %self.inner.config().workspace_id))]
     pub async fn merge(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         source: Uuid,
         target: Uuid,
         strategy: MergeStrategy,
@@ -77,7 +77,7 @@ impl GuardedBranchEngine {
     #[tracing::instrument(skip(self, session), fields(workspace_id = %self.inner.config().workspace_id, branch_id = %branch_id))]
     pub async fn commit_to_trunk(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         branch_id: Uuid,
     ) -> BranchResult<()> {
         self.check_write(session, "branch:commit_to_trunk").await?;
@@ -89,7 +89,7 @@ impl GuardedBranchEngine {
     #[tracing::instrument(skip(self, session), fields(workspace_id = %self.inner.config().workspace_id, branch_id = %branch_id))]
     pub async fn discard(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         branch_id: Uuid,
     ) -> BranchResult<()> {
         self.check_write(session, "branch:discard").await?;
@@ -100,7 +100,7 @@ impl GuardedBranchEngine {
     #[tracing::instrument(skip(self, session, f), fields(workspace_id = %self.inner.config().workspace_id, branch_id = %parent_id))]
     pub async fn simulate<F, Fut>(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         parent_id: Uuid,
         scenario: SimulationScenario,
         f: F,
@@ -117,7 +117,7 @@ impl GuardedBranchEngine {
     #[tracing::instrument(skip(self, session), fields(workspace_id = %self.inner.config().workspace_id))]
     pub async fn diff(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         source: Uuid,
         target: Uuid,
     ) -> BranchResult<DiffResult> {
@@ -129,7 +129,7 @@ impl GuardedBranchEngine {
     #[tracing::instrument(skip(self, session), fields(workspace_id = %self.inner.config().workspace_id))]
     pub async fn compare_branches(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         source: Uuid,
         target: Uuid,
     ) -> BranchResult<DiffResult> {
@@ -141,7 +141,7 @@ impl GuardedBranchEngine {
     #[tracing::instrument(skip(self, session), fields(workspace_id = %self.inner.config().workspace_id))]
     pub async fn list_branches(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
     ) -> BranchResult<Vec<Branch>> {
         self.check_read(session, "branch:list").await?;
         self.inner.list(None).await
@@ -149,7 +149,7 @@ impl GuardedBranchEngine {
 
     /// Reads trunk after read access check.
     #[tracing::instrument(skip(self, session), fields(workspace_id = %self.inner.config().workspace_id))]
-    pub async fn trunk(&self, session: &claw_guard::ClawSession) -> BranchResult<Branch> {
+    pub async fn trunk(&self, session: &claw_guard::GuardSession) -> BranchResult<Branch> {
         self.check_read(session, "branch:trunk").await?;
         self.inner.trunk().await
     }
@@ -158,7 +158,7 @@ impl GuardedBranchEngine {
     #[tracing::instrument(skip(self, session), fields(workspace_id = %self.inner.config().workspace_id, branch_id = %branch_id))]
     pub async fn get_metrics(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         branch_id: Uuid,
     ) -> BranchResult<BranchMetrics> {
         self.check_read(session, "branch:get_metrics").await?;
@@ -169,7 +169,7 @@ impl GuardedBranchEngine {
     #[tracing::instrument(skip(self, session, selections), fields(workspace_id = %self.inner.config().workspace_id))]
     pub async fn cherry_pick(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         source: Uuid,
         target: Uuid,
         selections: Vec<EntitySelection>,
@@ -183,7 +183,7 @@ impl GuardedBranchEngine {
 
     async fn check_read(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         resource: &str,
     ) -> BranchResult<()> {
         self.check(session, "read", resource).await
@@ -191,7 +191,7 @@ impl GuardedBranchEngine {
 
     async fn check_write(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         resource: &str,
     ) -> BranchResult<()> {
         self.check(session, "write", resource).await
@@ -199,22 +199,20 @@ impl GuardedBranchEngine {
 
     async fn check(
         &self,
-        session: &claw_guard::ClawSession,
+        session: &claw_guard::GuardSession,
         action: &str,
         resource: &str,
     ) -> BranchResult<()> {
         let result = self
             .guard
-            .check_access(&session.token, action, resource)
+            .check_access(session, action, resource)
             .await
             .map_err(|error| BranchError::PermissionDenied(error.to_string()))?;
 
         match result {
-            claw_guard::AccessResult::Allowed => Ok(()),
-            claw_guard::AccessResult::Denied { reason } => {
-                Err(BranchError::PermissionDenied(reason))
-            }
-            claw_guard::AccessResult::Masked { .. } => Err(BranchError::PermissionDenied(
+            claw_guard::AccessResult::Allow => Ok(()),
+            claw_guard::AccessResult::Deny { reason } => Err(BranchError::PermissionDenied(reason)),
+            claw_guard::AccessResult::Mask { .. } => Err(BranchError::PermissionDenied(
                 "masked access not applicable to branch ops".to_string(),
             )),
         }

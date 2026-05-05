@@ -2,23 +2,31 @@
 
 use crate::error::{BranchError, BranchResult};
 
+/// Returns `true` when every character in `name` is in `[a-zA-Z0-9_/.-]`
+/// and the length is in `[1, 128]`.
+fn chars_valid(name: &str) -> bool {
+    let len = name.len();
+    if len == 0 || len > 128 {
+        return false;
+    }
+    name.bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'/' || b == b'.' || b == b'-')
+}
+
 /// Validates branch names and derives canonical slugs.
 pub struct NamingValidator;
 
 impl NamingValidator {
     /// Validates a branch name against reserved names and formatting rules.
     pub fn validate(name: &str) -> BranchResult<()> {
-        if name.is_empty() || name.len() > 128 {
-            return Err(BranchError::InvalidBranchName);
+        if !chars_valid(name) {
+            return Err(BranchError::InvalidBranchName(name.to_string()));
         }
-        if name.starts_with('/') || name.contains("..") {
-            return Err(BranchError::InvalidBranchName);
+        if name.starts_with('/') {
+            return Err(BranchError::InvalidBranchName(name.to_string()));
         }
-        if !name
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '/' | '.' | '-'))
-        {
-            return Err(BranchError::InvalidBranchName);
+        if name.split('/').any(|segment| segment == "..") {
+            return Err(BranchError::InvalidBranchName(name.to_string()));
         }
         Ok(())
     }

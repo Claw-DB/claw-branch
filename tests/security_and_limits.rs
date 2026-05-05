@@ -47,18 +47,19 @@ async fn seed_source_db(path: &std::path::Path) {
 
 #[tokio::test]
 async fn branch_name_validation_required_cases() {
+    assert!(NamingValidator::validate("feature/valid-name").is_ok());
     assert!(NamingValidator::validate("feature/a.b-c_1").is_ok());
     assert!(matches!(
         NamingValidator::validate("feature/../escape"),
-        Err(BranchError::InvalidBranchName)
+        Err(BranchError::InvalidBranchName(_))
     ));
     assert!(matches!(
         NamingValidator::validate("/etc/passwd"),
-        Err(BranchError::InvalidBranchName)
+        Err(BranchError::InvalidBranchName(_))
     ));
     assert!(matches!(
         NamingValidator::validate(&"a".repeat(129)),
-        Err(BranchError::InvalidBranchName)
+        Err(BranchError::InvalidBranchName(_))
     ));
 }
 
@@ -114,7 +115,10 @@ async fn snapshot_sidecar_detects_tamper() {
 
     let engine = BranchEngine::new(config, &source_db).await.expect("engine");
     let branch = engine.trunk().await.expect("trunk");
-    std::fs::write(&branch.db_path, b"tampered").expect("tamper write");
+    let mut bytes = std::fs::read(&branch.db_path).expect("read snapshot db");
+    assert!(!bytes.is_empty(), "snapshot db should not be empty");
+    bytes[0] ^= 0b0000_0001;
+    std::fs::write(&branch.db_path, bytes).expect("tamper write");
 
     let manifest = SnapshotManifest::load(
         branch
@@ -159,4 +163,51 @@ async fn missing_sidecar_is_rejected() {
         result,
         Err(BranchError::SnapshotHashMissing { .. })
     ));
+}
+
+#[tokio::test]
+async fn workspace_isolation_filters_other_workspace_rows() {
+    let dir = TempDir::new().expect("tempdir");
+    let source_a = dir.path().join("source-a.db");
+    let source_b = dir.path().join("source-b.db");
+    seed_source_db(&source_a).await;
+    seed_source_db(&source_b).await;
+
+    let shared_branches_dir = dir.path().join("shared-branches");
+    let workspace_a = Uuid::new_v4();
+    let workspace_b = Uuid::new_v4();
+
+    let config_a = BranchConfig::builder()
+        .workspace_id(workspace_a)
+        .branches_dir(&shared_branches_dir)
+        .build()
+        .expect("config_a");
+    let engine_a = BranchEngine::new(config_a, &source_a)
+        .await
+        .expect("engine_a");
+    let branch_a = engine_a
+        .fork_trunk("workspace-a-only")
+        .await
+        .expect("fork in workspace_a");
+
+    let config_b = BranchConfig::builder()
+        .workspace_id(workspace_b)
+        .branches_dir(&shared_branches_dir)
+        .build()
+        .expect("config_b");
+    let engine_b = BranchEngine::new(config_b, &source_b)
+        .await
+        .expect("engine_b");
+
+    let listed_b = engine_b.list(None).await.expect("list workspace_b");
+    assert!(
+        listed_b
+            .iter()
+            .all(|branch| branch.workspace_id == workspace_b),
+        "workspace_b should never observe workspace_a rows"
+    );
+    assert!(
+        listed_b.iter().all(|branch| branch.id != branch_a.id),
+        "workspace_b list leaked branch id from workspace_a"
+    );
 }

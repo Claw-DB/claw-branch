@@ -73,7 +73,7 @@ impl MetricsTracker {
 
         // Compute divergence score relative to the parent branch.
         let divergence_score = if let Some(parent_id) = branch.parent_id {
-            match self.store.get(parent_id).await {
+            match self.store.get(self.config.workspace_id, parent_id).await {
                 Ok(parent) => {
                     let extractor = DiffExtractor::new(Arc::clone(&self.config));
                     match extractor.diff(branch, &parent, None).await {
@@ -126,7 +126,7 @@ impl MetricsTracker {
 
     /// Records a single write operation on a branch, incrementing the relevant counters.
     pub async fn track_op(&self, branch_id: Uuid, op_kind: OpKind) -> BranchResult<()> {
-        let mut branch = self.store.get(branch_id).await?;
+        let mut branch = self.store.get(self.config.workspace_id, branch_id).await?;
         branch.metrics.op_count += 1;
         branch.metrics.last_activity_at = Some(Utc::now());
         match op_kind {

@@ -276,7 +276,7 @@ impl BranchEngine {
     /// Retrieves a branch by ID.
     #[tracing::instrument(skip(self))]
     pub async fn get(&self, id: Uuid) -> BranchResult<Branch> {
-        let branch = self.store.get(id).await?;
+        let branch = self.store.get(self.config.workspace_id, id).await?;
         self.ensure_workspace_access(&branch)?;
         Ok(branch)
     }
@@ -290,7 +290,11 @@ impl BranchEngine {
     /// Lists all branches in the workspace, optionally filtered by status.
     #[tracing::instrument(skip(self))]
     pub async fn list(&self, status: Option<BranchStatus>) -> BranchResult<Vec<Branch>> {
-        self.store.list(self.config.workspace_id, status).await
+        let branches = self.store.list(self.config.workspace_id, status).await?;
+        for branch in &branches {
+            self.ensure_workspace_access(branch)?;
+        }
+        Ok(branches)
     }
 
     /// Returns the trunk branch.
@@ -309,7 +313,7 @@ impl BranchEngine {
         name: &str,
         description: Option<&str>,
     ) -> BranchResult<Branch> {
-        let parent = self.store.get(parent_id).await?;
+        let parent = self.store.get(self.config.workspace_id, parent_id).await?;
         self.ensure_workspace_access(&parent)?;
         self.lifecycle.fork(parent_id, name, description).await
     }
@@ -317,6 +321,7 @@ impl BranchEngine {
     /// Forks a new branch from the trunk.
     #[tracing::instrument(skip(self))]
     pub async fn fork_trunk(&self, name: &str) -> BranchResult<Branch> {
+        crate::branch::naming::NamingValidator::validate(name)?;
         let trunk = self.trunk().await?;
         self.lifecycle.fork(trunk.id, name, None).await
     }
@@ -324,7 +329,7 @@ impl BranchEngine {
     /// Discards a branch, marking it as inactive.
     #[tracing::instrument(skip(self))]
     pub async fn discard(&self, id: Uuid) -> BranchResult<()> {
-        let branch = self.store.get(id).await?;
+        let branch = self.store.get(self.config.workspace_id, id).await?;
         self.ensure_workspace_access(&branch)?;
         self.lifecycle.discard(id).await
     }
@@ -332,7 +337,7 @@ impl BranchEngine {
     /// Archives a branch.
     #[tracing::instrument(skip(self))]
     pub async fn archive(&self, id: Uuid) -> BranchResult<()> {
-        let branch = self.store.get(id).await?;
+        let branch = self.store.get(self.config.workspace_id, id).await?;
         self.ensure_workspace_access(&branch)?;
         self.lifecycle.archive(id).await
     }
@@ -342,8 +347,8 @@ impl BranchEngine {
     /// Computes the diff between two branches.
     #[tracing::instrument(skip(self))]
     pub async fn diff(&self, a: Uuid, b: Uuid) -> BranchResult<DiffResult> {
-        let branch_a = self.store.get(a).await?;
-        let branch_b = self.store.get(b).await?;
+        let branch_a = self.store.get(self.config.workspace_id, a).await?;
+        let branch_b = self.store.get(self.config.workspace_id, b).await?;
         self.ensure_workspace_access(&branch_a)?;
         self.ensure_workspace_access(&branch_b)?;
         let extractor = DiffExtractor::new(Arc::clone(&self.config));
@@ -369,12 +374,12 @@ impl BranchEngine {
         target: Uuid,
         strategy: MergeStrategy,
     ) -> BranchResult<MergeResult> {
-        let source_branch = self.store.get(source).await?;
-        let target_branch = self.store.get(target).await?;
+        let source_branch = self.store.get(self.config.workspace_id, source).await?;
+        let target_branch = self.store.get(self.config.workspace_id, target).await?;
         self.ensure_workspace_access(&source_branch)?;
         self.ensure_workspace_access(&target_branch)?;
         let base_id = source_branch.parent_id.unwrap_or(target);
-        let base_branch = self.store.get(base_id).await?;
+        let base_branch = self.store.get(self.config.workspace_id, base_id).await?;
         self.ensure_workspace_access(&base_branch)?;
         let resolver = Arc::new(ConflictResolver);
         let merger = ThreeWayMerger::new(resolver, Arc::clone(&self.config));
@@ -392,12 +397,12 @@ impl BranchEngine {
     /// Previews a three-way merge without applying any changes.
     #[tracing::instrument(skip(self))]
     pub async fn merge_preview(&self, source: Uuid, target: Uuid) -> BranchResult<MergePreview> {
-        let source_branch = self.store.get(source).await?;
-        let target_branch = self.store.get(target).await?;
+        let source_branch = self.store.get(self.config.workspace_id, source).await?;
+        let target_branch = self.store.get(self.config.workspace_id, target).await?;
         self.ensure_workspace_access(&source_branch)?;
         self.ensure_workspace_access(&target_branch)?;
         let base_id = source_branch.parent_id.unwrap_or(target);
-        let base_branch = self.store.get(base_id).await?;
+        let base_branch = self.store.get(self.config.workspace_id, base_id).await?;
         self.ensure_workspace_access(&base_branch)?;
         let resolver = Arc::new(ConflictResolver);
         let merger = ThreeWayMerger::new(resolver, Arc::clone(&self.config));
@@ -411,8 +416,14 @@ impl BranchEngine {
     /// Executes a selective cherry-pick commit.
     #[tracing::instrument(skip(self))]
     pub async fn commit(&self, cherry: CherryPick) -> BranchResult<CommitResult> {
-        let source = self.store.get(cherry.source_branch_id).await?;
-        let target = self.store.get(cherry.target_branch_id).await?;
+        let source = self
+            .store
+            .get(self.config.workspace_id, cherry.source_branch_id)
+            .await?;
+        let target = self
+            .store
+            .get(self.config.workspace_id, cherry.target_branch_id)
+            .await?;
         self.ensure_workspace_access(&source)?;
         self.ensure_workspace_access(&target)?;
         let committer = SelectiveCommit::from_store(
@@ -446,7 +457,7 @@ impl BranchEngine {
     /// Commits all entities from `source_id` to the trunk branch.
     #[tracing::instrument(skip(self))]
     pub async fn commit_to_trunk(&self, source_id: Uuid) -> BranchResult<CommitResult> {
-        let source = self.store.get(source_id).await?;
+        let source = self.store.get(self.config.workspace_id, source_id).await?;
         self.ensure_workspace_access(&source)?;
         let trunk = self.trunk().await?;
         let committer = SelectiveCommit::from_store(
@@ -475,7 +486,7 @@ impl BranchEngine {
         F: FnOnce(sqlx::SqlitePool) -> Fut,
         Fut: std::future::Future<Output = BranchResult<serde_json::Value>>,
     {
-        let parent = self.store.get(parent_id).await?;
+        let parent = self.store.get(self.config.workspace_id, parent_id).await?;
         self.ensure_workspace_access(&parent)?;
         let env = SimulationEnvironment::setup(
             &parent,
@@ -516,7 +527,7 @@ impl BranchEngine {
     /// Returns up-to-date metrics for the given branch.
     #[tracing::instrument(skip(self))]
     pub async fn metrics(&self, branch_id: Uuid) -> BranchResult<BranchMetrics> {
-        let branch = self.store.get(branch_id).await?;
+        let branch = self.store.get(self.config.workspace_id, branch_id).await?;
         self.metrics.refresh(&branch).await
     }
 
@@ -616,9 +627,10 @@ impl BranchEngine {
 
     fn ensure_workspace_access(&self, branch: &Branch) -> BranchResult<()> {
         if branch.workspace_id != self.config.workspace_id {
-            return Err(BranchError::PermissionDenied(
-                "cross-workspace branch access denied".to_string(),
-            ));
+            return Err(BranchError::WorkspaceIsolationViolation {
+                expected: self.config.workspace_id,
+                found: branch.workspace_id,
+            });
         }
         Ok(())
     }

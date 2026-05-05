@@ -98,7 +98,7 @@ impl SnapshotGc {
 
             match parse_branch_dir_uuid(&path) {
                 Ok(branch_id) => {
-                    if matches!(self.registry.get(branch_id).await, Err(error) if error.is_not_found())
+                    if matches!(self.registry.get(self.config.workspace_id, branch_id).await, Err(error) if error.is_not_found())
                     {
                         paths.push(path);
                     }

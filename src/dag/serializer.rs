@@ -119,9 +119,11 @@ impl DagSerializer {
         let edge_rows = sqlx::query(
             "SELECT e.parent_id, e.child_id, e.forked_at, e.merge_cursor \
              FROM dag_edges e \
-             JOIN dag_nodes n ON n.branch_id = e.parent_id \
-             WHERE n.workspace_id = ?",
+               JOIN dag_nodes np ON np.branch_id = e.parent_id \
+               JOIN dag_nodes nc ON nc.branch_id = e.child_id \
+               WHERE np.workspace_id = ? AND nc.workspace_id = ?",
         )
+        .bind(&workspace_str)
         .bind(&workspace_str)
         .fetch_all(&self.pool)
         .await?;

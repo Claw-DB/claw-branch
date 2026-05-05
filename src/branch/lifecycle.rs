@@ -94,7 +94,8 @@ impl BranchLifecycle {
         name: &str,
         description: Option<&str>,
     ) -> BranchResult<Branch> {
-        let parent = self.store.get(parent_id).await?;
+        NamingValidator::validate(name)?;
+        let parent = self.store.get(self.config.workspace_id, parent_id).await?;
         if !parent.status.is_live() {
             return Err(BranchError::BranchNotActive {
                 id: parent.id,
@@ -106,8 +107,6 @@ impl BranchLifecycle {
         {
             return Err(BranchError::BranchLimitExceeded);
         }
-        NamingValidator::validate(name)?;
-
         let existing_slugs = self
             .store
             .list(parent.workspace_id, None)
@@ -176,7 +175,7 @@ impl BranchLifecycle {
 
     /// Activates a dormant branch.
     pub async fn activate(&self, id: Uuid) -> BranchResult<()> {
-        let branch = self.store.get(id).await?;
+        let branch = self.store.get(self.config.workspace_id, id).await?;
         match branch.status {
             BranchStatus::Dormant => {
                 self.store.update_status(id, BranchStatus::Active).await?;
@@ -193,7 +192,7 @@ impl BranchLifecycle {
 
     /// Deactivates an active branch into a dormant branch.
     pub async fn deactivate(&self, id: Uuid) -> BranchResult<()> {
-        let branch = self.store.get(id).await?;
+        let branch = self.store.get(self.config.workspace_id, id).await?;
         match branch.status {
             BranchStatus::Active => {
                 self.store.update_status(id, BranchStatus::Dormant).await?;
@@ -209,7 +208,7 @@ impl BranchLifecycle {
 
     /// Marks a live branch as discarded and leaves cleanup to the garbage collector.
     pub async fn discard(&self, id: Uuid) -> BranchResult<()> {
-        let branch = self.store.get(id).await?;
+        let branch = self.store.get(self.config.workspace_id, id).await?;
         if !branch.status.is_live() {
             return Err(BranchError::BranchNotActive {
                 id,
@@ -230,7 +229,7 @@ impl BranchLifecycle {
 
     /// Archives a live branch for later restore.
     pub async fn archive(&self, id: Uuid) -> BranchResult<()> {
-        let branch = self.store.get(id).await?;
+        let branch = self.store.get(self.config.workspace_id, id).await?;
         if !branch.status.is_live() {
             return Err(BranchError::BranchNotActive {
                 id,
@@ -244,7 +243,7 @@ impl BranchLifecycle {
 
     /// Restores an archived branch back to active service.
     pub async fn restore_archived(&self, id: Uuid) -> BranchResult<Branch> {
-        let branch = self.store.get(id).await?;
+        let branch = self.store.get(self.config.workspace_id, id).await?;
         match branch.status {
             BranchStatus::Archived => {
                 let manifest = crate::snapshot::manifest::SnapshotManifest::load(
@@ -258,7 +257,7 @@ impl BranchLifecycle {
                 )?;
                 verify_snapshot(&manifest).await?;
                 self.store.update_status(id, BranchStatus::Active).await?;
-                self.store.get(id).await
+                self.store.get(self.config.workspace_id, id).await
             }
             other => Err(BranchError::BranchNotActive {
                 id,

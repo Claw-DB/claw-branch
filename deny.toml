@@ -1,21 +1,31 @@
 [advisories]
-db-path = "~/.cargo/advisory-db"
-db-urls = ["https://github.com/rustsec/advisory-db"]
-ignore = []
+version = 2
+yanked = "deny"
+# All three advisories are transitively pulled in via claw-guard (dev dep only).
+# RUSTSEC-2023-0071: Marvin Attack on rsa (jsonwebtoken → rsa) — no patch.
+# RUSTSEC-2025-0012: backoff crate unmaintained — no drop-in replacement in guard.
+# RUSTSEC-2024-0384: instant crate unmaintained — transitively via backoff.
+ignore = [
+    "RUSTSEC-2023-0071",
+    "RUSTSEC-2025-0012",
+    "RUSTSEC-2024-0384",
+]
 
 [licenses]
+version = 2
 allow = [
-	"Apache-2.0",
-	"BSD-3-Clause",
-	"CDLA-Permissive-2.0",
-	"MIT",
-	"ISC",
-	"MPL-2.0",
-	"Unicode-3.0",
-	"Unicode-DFS-2016",
-	"Zlib",
+    "Apache-2.0",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "ISC",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Zlib",
+    "CDLA-Permissive-2.0",
 ]
-confidence-threshold = 0.8
 
 [bans]
 multiple-versions = "warn"

@@ -69,11 +69,12 @@ impl BranchStore {
         self.update_metrics(branch.id, &branch.metrics).await
     }
 
-    /// Retrieves a branch by id.
-    pub async fn get(&self, id: Uuid) -> BranchResult<Branch> {
+    /// Retrieves a branch by id within a workspace.
+    pub async fn get(&self, workspace_id: Uuid, id: Uuid) -> BranchResult<Branch> {
         let row = sqlx::query(
-            "SELECT b.id, b.name, b.slug, b.workspace_id, b.parent_id, b.status, b.db_path, b.snapshot_path, b.forked_from_cursor, b.description, b.metadata, b.created_at, b.updated_at, m.op_count, m.memory_record_count, m.session_count, m.tool_output_count, m.bytes_on_disk, m.divergence_score, m.created_entity_count, m.updated_entity_count, m.deleted_entity_count, m.last_activity_at FROM branches b LEFT JOIN branch_metrics m ON m.branch_id = b.id WHERE b.id = ?",
+            "SELECT b.id, b.name, b.slug, b.workspace_id, b.parent_id, b.status, b.db_path, b.snapshot_path, b.forked_from_cursor, b.description, b.metadata, b.created_at, b.updated_at, m.op_count, m.memory_record_count, m.session_count, m.tool_output_count, m.bytes_on_disk, m.divergence_score, m.created_entity_count, m.updated_entity_count, m.deleted_entity_count, m.last_activity_at FROM branches b LEFT JOIN branch_metrics m ON m.branch_id = b.id WHERE b.workspace_id = ? AND b.id = ?",
         )
+        .bind(workspace_id.to_string())
         .bind(id.to_string())
         .fetch_optional(&self.pool)
         .await?;

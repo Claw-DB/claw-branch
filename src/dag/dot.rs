@@ -18,7 +18,7 @@ pub async fn export_dot(graph: &DagGraph, store: &BranchStore) -> BranchResult<S
 
     // Emit nodes.
     for node_id in graph.all_nodes() {
-        let (label, color, fill_color) = match store.get(node_id).await {
+        let (label, color, fill_color) = match store.get(workspace_id, node_id).await {
             Ok(branch) => {
                 let label = format!(
                     "{} ({})",

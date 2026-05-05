@@ -34,15 +34,23 @@ pub struct SelectiveCommit {
     pub target_pool: SqlitePool,
     /// Shared branch registry for commit log recording.
     pub store: Arc<BranchStore>,
+    /// Workspace identifier used to scope branch registry lookups.
+    pub workspace_id: Uuid,
 }
 
 impl SelectiveCommit {
     /// Creates a new selective commit executor with pre-opened pools.
-    pub fn new(source_pool: SqlitePool, target_pool: SqlitePool, store: Arc<BranchStore>) -> Self {
+    pub fn new(
+        source_pool: SqlitePool,
+        target_pool: SqlitePool,
+        store: Arc<BranchStore>,
+        workspace_id: Uuid,
+    ) -> Self {
         Self {
             source_pool,
             target_pool,
             store,
+            workspace_id,
         }
     }
 
@@ -51,16 +59,17 @@ impl SelectiveCommit {
         store: Arc<BranchStore>,
         source_id: Uuid,
         target_id: Uuid,
-        _workspace_id: Uuid,
+        workspace_id: Uuid,
     ) -> BranchResult<Self> {
-        let source = store.get(source_id).await?;
-        let target = store.get(target_id).await?;
+        let source = store.get(workspace_id, source_id).await?;
+        let target = store.get(workspace_id, target_id).await?;
         let source_pool = open_pool(&source.db_path, true).await?;
         let target_pool = open_pool(&target.db_path, false).await?;
         Ok(Self {
             source_pool,
             target_pool,
             store,
+            workspace_id,
         })
     }
 
@@ -76,8 +85,14 @@ impl SelectiveCommit {
         let started = Instant::now();
 
         // Load source and target branches for validation.
-        let source = self.store.get(cherry.source_branch_id).await?;
-        let target = self.store.get(cherry.target_branch_id).await?;
+        let source = self
+            .store
+            .get(self.workspace_id, cherry.source_branch_id)
+            .await?;
+        let target = self
+            .store
+            .get(self.workspace_id, cherry.target_branch_id)
+            .await?;
 
         let validator = CommitValidator::new(self.source_pool.clone());
         let report = validator.validate(cherry, &source, &target).await?;
