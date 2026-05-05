@@ -44,7 +44,7 @@ once_cell = "1"
 
 [dev-dependencies]
 tokio-test = "0.4"
-rstest = "0.21"
+rstest = "0.26"
 approx = "0.5"
 criterion = { version = "0.5", features = ["async_tokio"] }
 claw-guard = { version = "0.1.2" }
