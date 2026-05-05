@@ -30,7 +30,7 @@ chrono = { version = "0.4", features = ["serde"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate", "chrono", "uuid"] }
 async-trait = "0.1"
 blake3 = "1.5"
-similar = "2.5"
+similar = "3.1"
 petgraph = "0.6"
 dashmap = "6"
 arc-swap = "1"
