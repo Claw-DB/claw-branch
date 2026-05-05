@@ -46,7 +46,7 @@ once_cell = "1"
 tokio-test = "0.4"
 rstest = "0.21"
 approx = "0.5"
-criterion = { version = "0.5", features = ["async_tokio"] }
+criterion = { version = "0.8", features = ["async_tokio"] }
 claw-guard = { version = "0.1.2" }
 proptest = "1"
 
